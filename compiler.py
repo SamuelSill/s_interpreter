@@ -292,11 +292,10 @@ class Program:
     instructions: list[Instruction]
 
     @staticmethod
-    def compile(*s_program: str,
+    def compile(*program: str,
                 sugars: _Optional[list["SyntacticSugar"]] = None) -> "Program":
         if sugars is None:
             sugars = []
-        s_program_lines = s_program if len(s_program) > 1 else s_program[0].splitlines()
 
         @_dataclass
         class SugarJob:
@@ -306,7 +305,7 @@ class Program:
 
         sugar_jobs: list[SugarJob] = []
         instructions: list[Instruction] = []
-        for line in s_program_lines:
+        for line in program:
             try:
                 instructions.append(Instruction.compile(line))
             except CompilationFailure as compilation_failure:
@@ -330,7 +329,8 @@ class Program:
                 sugar_jobs[sugar_job_index].index_to_inject += len(instructions_to_inject)
                 sugar_job_index += 1
 
-        if (instructions[-1].label is None and
+        if (len(instructions) > 0 and
+                instructions[-1].label is None and
                 type(instructions[-1].sentence.command) is VariableCommand and
                 instructions[-1].sentence.command.variable.name == "Y" and
                 instructions[-1].sentence.command.command_type == VariableCommandType.NoOp):
@@ -366,8 +366,11 @@ class Program:
         import re
 
         max_sentence_indentation: int = max(
-            len(re.match(r"(\[.*])?\s*", str(instruction)).group())
-            for instruction in self.instructions
+            (
+                len(re.match(r"(\[.*])?\s*", str(instruction)).group())
+                for instruction in self.instructions
+            ),
+            default=0
         )
 
         return "\n".join(
@@ -617,6 +620,57 @@ class SyntacticSugar:
         raise CompilationFailure(f"Failed using sugar to compile line: '{invocation}'")
 
 
+def main() -> None:
+    from argparse import ArgumentParser, Namespace
+    import re
+
+    argument_parser: ArgumentParser = ArgumentParser(description="S Compiler")
+    argument_parser.add_argument("filename",
+                                 type=str,
+                                 help="File to compile")
+    argument_parser.add_argument("-o",
+                                 "--output",
+                                 type=str,
+                                 help="Output program file")
+    arguments: Namespace = argument_parser.parse_args()
+
+    with open(arguments.filename, "r") as file_to_compile:
+        file_to_compile_content: list[str] = file_to_compile.readlines()
+
+    current_section_lines: list[str] = []
+    current_section_title: str = ""
+    sugars: list[SyntacticSugar] = []
+    is_main: bool = False
+
+    for line_index, line in enumerate(file_to_compile_content):
+        if re.fullmatch(r"\s*", line):
+            pass
+        elif title_match := re.fullmatch(r"\s*!\s*(?P<title>.*)\s*", line):
+            if is_main:
+                raise CompilationFailure(f"Encountered sugar title after MAIN: '{line}'")
+
+            sugars.append(SyntacticSugar(current_section_title,
+                                         *current_section_lines,
+                                         sugars=sugars.copy()))
+            is_main = bool(re.fullmatch(r"MAIN",
+                                        current_section_title := title_match.group("title"),
+                                        re.IGNORECASE))
+            current_section_lines = []
+        elif line_match := re.fullmatch(r"\s*(?P<line>.*)\s*", line):
+            current_section_lines.append(line_match.group("line"))
+        else:
+            raise CompilationFailure(f"Failed to compile line {line_index}: '{line}'")
+
+    program: str = str(Program.compile(*current_section_lines, sugars=sugars))
+
+    with open(arguments.output, "w") as output_file:
+        output_file.write(program)
+
+
+if __name__ == '__main__':
+    main()
+
+
 __all__ = (
     "CompilationFailure",
     "encode_pair",
@@ -630,4 +684,5 @@ __all__ = (
     "Instruction",
     "Program",
     "SyntacticSugar",
+    "main"
 )

@@ -17,7 +17,7 @@ class Interpreter:
             if instruction.label is not None and instruction.label not in self.__label_map:
                 self.__label_map[instruction.label] = instruction_index
 
-        self.__variables: dict[_compiler.Variable: int] = {}
+        self.__variables: dict[_compiler.Variable: int] = {_compiler.Variable("Y", 1): 0}
         for instruction in self.__program.instructions:
             if (
                 type(instruction.sentence.command) is _compiler.JumpCommand and
@@ -61,15 +61,16 @@ class Interpreter:
               *x: int) -> None:
         if any(value < 0 for value in x):
             raise InterpreterError("Given negative input values! Only non-negatives in S!")
+
+        for key in self.__variables:
+            self.__variables[key] = 0
         self.__variables.update({
             variable: value
             for index, value in enumerate(x)
             if (variable := _compiler.Variable("X", index + 1)) in self.__variables
         })
 
-        for key in self.__variables:
-            self.__variables[key] = 0
-
+        self.__variables[_compiler.Variable("Y", 1)] = 0
         self.__instruction_index = 0
 
     def run(self,
@@ -81,7 +82,31 @@ class Interpreter:
         return result
 
 
+def main() -> None:
+    from argparse import ArgumentParser, Namespace
+
+    argument_parser: ArgumentParser = ArgumentParser(description="S Compiler")
+    argument_parser.add_argument("-b",
+                                 "--binary",
+                                 type=str,
+                                 help="Binary file to run")
+    argument_parser.add_argument("x",
+                                 type=int,
+                                 nargs="+",
+                                 help="The program's input")
+    arguments: Namespace = argument_parser.parse_args()
+
+    with open(arguments.binary, "r") as binary_file:
+        binary_file_content: list[str] = binary_file.readlines()
+    print(Interpreter(_compiler.Program.compile(*binary_file_content)).run(*arguments.x))
+
+
+if __name__ == '__main__':
+    main()
+
+
 __all__ = (
     "InterpreterError",
     "Interpreter",
+    "main"
 )
