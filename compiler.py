@@ -431,11 +431,11 @@ class SyntacticSugar:
         self.__implementation: tuple[str] = implementation
         repeat_counter: int = 0
         for line in self.__implementation:
-            if re.fullmatch(r"\s*REPEAT\s*{.*}\s*",
+            if re.fullmatch(r"\s*{\s*REPEAT\s+.+\s*}\s*",
                             line,
                             flags=re.IGNORECASE):
                 repeat_counter += 1
-            elif re.fullmatch(r"\s*END\s+REPEAT\s*",
+            elif re.fullmatch(r"\s*{\s*END\s+REPEAT\s*}\s*",
                               line,
                               flags=re.IGNORECASE):
                 if repeat_counter == 0:
@@ -530,13 +530,13 @@ class SyntacticSugar:
             repeat_start_indices: list[int] = []
             line_index: int = 0
             while line_index < len(self.__implementation):
-                if repeat_match := re.fullmatch(r"\s*REPEAT\s*{\s*(?P<const_name>[A-Z]([A-Z]|\d)*)\s*}\s*",
+                if repeat_match := re.fullmatch(r"\s*{\s*REPEAT\s+(?P<const_name>[A-Z]([A-Z]|\d)*)\s*}\s*",
                                                 self.__implementation[line_index],
                                                 flags=re.IGNORECASE):
                     line_index += 1
                     repeat_counters.append(int(invocation_match.group(repeat_match.group("const_name"))))
                     repeat_start_indices.append(line_index)
-                elif re.fullmatch(r"\s*END\s+REPEAT\s*",
+                elif re.fullmatch(r"\s*{\s*END\s+REPEAT\s*}\s*",
                                   self.__implementation[line_index],
                                   flags=re.IGNORECASE):
                     repeat_counters[-1] -= 1
@@ -549,9 +549,9 @@ class SyntacticSugar:
                 else:
                     line: str = self.__implementation[line_index]
                     for invocation_argument_type, invocation_argument_name in self.__invocation_arguments:
-                        if invocation_argument_type is Label or invocation_argument_type is Variable:
-                            invocation_parameter: str = invocation_match.group(invocation_argument_name)
+                        invocation_parameter: str = invocation_match.group(invocation_argument_name)
 
+                        if invocation_argument_type is Label or invocation_argument_type is Variable:
                             if invocation_parameter not in parameter_replacements:
                                 if invocation_argument_type is Label:
                                     generated_label: Label = label_generator.generate(max_sugar_internals)
@@ -562,10 +562,10 @@ class SyntacticSugar:
                                     parameter_replacements[invocation_parameter]: str = str(generated_variable)
                                     fixes_to_perform[generated_variable] = Variable.compile(invocation_parameter)
 
-                            line = re.sub(r"{\s*" + invocation_argument_name + r"\s*}",
-                                          parameter_replacements[invocation_parameter],
-                                          line,
-                                          flags=re.IGNORECASE)
+                        line = re.sub(r"{\s*" + invocation_argument_name + r"\s*}",
+                                      parameter_replacements.get(invocation_parameter, invocation_parameter),
+                                      line,
+                                      flags=re.IGNORECASE)
                     sugar_program_instructions.append(line)
                     line_index += 1
 
