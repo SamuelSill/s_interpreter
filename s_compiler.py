@@ -29,21 +29,20 @@ class Variable:
     @staticmethod
     def compile(variable_string: str) -> "Variable":
         if (variable_match := re.fullmatch(
-                r"\s*(?P<variable_name>[XYZxyz])(?P<index>([1-9][0-9]*)?)\s*",
-                variable_string
+            r"\s*(?P<variable_name>[XYZ])(?P<index>([1-9][0-9]*)?)\s*",
+            variable_string,
+            flags=re.IGNORECASE
         )):
-            if (
-                variable_match.group("variable_name") == "Y" and
-                len(variable_match.group("index")) > 0
-            ):
-                raise CompilationFailure(f"Failed to compile variable: \"{variable_string}\"")
-            return Variable(
+            variable: Variable = Variable(
                 variable_match.group("variable_name").upper(),
                 int(variable_match.group("index"))
                 if len(variable_match.group("index")) > 0
                 else
                 1
             )
+            if variable.name == "Y" and variable.index > 1:
+                raise CompilationFailure(f"Failed to compile variable: \"{variable_string}\"")
+            return variable
 
     def encode(self) -> int:
         return (
@@ -68,17 +67,21 @@ class Variable:
             )
         )
 
+    def __str__(self) -> str:
+        return f"{self.name}" + ("" if self.index == 1 else str(self.index))
+
 
 @dataclasses.dataclass(frozen=True)
 class Label:
     name: str
-    index: int
+    index: int = 1
 
     @staticmethod
     def compile(label_string: str) -> "Label":
         if (label_match := re.fullmatch(
-                r"\s*(?P<label>[A-Ea-e])(?P<index>([1-9][0-9]*)?)\s*",
-                label_string
+            r"\s*(?P<label>[A-E])(?P<index>([1-9][0-9]*)?)\s*",
+            label_string,
+            flags=re.IGNORECASE
         )):
             return Label(label_match.group("label").upper(),
                          int(label_match.group("index"))
@@ -98,11 +101,17 @@ class Label:
             ((encoded_label - 1) // 5) + 1
         )
 
+    def __str__(self) -> str:
+        return f"{self.name}" + ("" if self.index == 1 else str(self.index))
+
 
 @dataclasses.dataclass(frozen=True)
 class JumpCommand:
     variable: Variable
     label: Label
+
+    def __str__(self) -> str:
+        return f"IF {str(self.variable)} != 0 GOTO {str(self.label)}"
 
 
 class VariableCommandType(enum.IntEnum):
@@ -112,10 +121,7 @@ class VariableCommandType(enum.IntEnum):
 
     @staticmethod
     def compile(command_type: str) -> "VariableCommandType":
-        if (command_type_match := re.fullmatch(
-                r"(?P<operation>[+-])\s*1",
-                command_type
-        )):
+        if command_type_match := re.fullmatch(r"(?P<operation>[+-])\s*1", command_type):
             return (
                 VariableCommandType.Increment
                 if command_type_match.group("operation") == '+'
@@ -128,11 +134,27 @@ class VariableCommandType(enum.IntEnum):
     def encode(self) -> int:
         return int(self.value)
 
+    def __str__(self) -> str:
+        return (
+            ""
+            if self.value == VariableCommandType.NoOp
+            else
+            " + 1"
+            if self.value == VariableCommandType.Increment
+            else
+            " - 1"
+        )
+
 
 @dataclasses.dataclass(frozen=True)
 class VariableCommand:
     variable: Variable
     command_type: VariableCommandType
+
+    def __str__(self) -> str:
+        return (
+            f"{str(self.variable)} <- {str(self.variable)}{str(self.command_type)}"
+        )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -142,21 +164,24 @@ class Sentence:
     @staticmethod
     def compile(sentence: str) -> "Sentence":
         if (jump_match := re.fullmatch(
-                r"\s*[Ii][Ff]\s+(?P<variable>[XYZxyz]([1-9][0-9]*)?)\s*!\s*=\s*0\s+"
-                r"[Gg][Oo][Tt][Oo]\s+(?P<label>[A-Ea-e]([1-9][0-9]*)?)\s*",
-                sentence
+            r"\s*IF\s+(?P<variable>[XYZ]([1-9][0-9]*)?)\s*!\s*=\s*0\s+"
+            r"GOTO\s+(?P<label>[A-E]([1-9][0-9]*)?)\s*",
+            sentence,
+            flags=re.IGNORECASE
         )):
             return Sentence(JumpCommand(Variable.compile(jump_match.group("variable")),
                                         Label.compile(jump_match.group("label"))))
         if (variable_match := re.fullmatch(
-                r"\s*(?P<variable1>[XYZxyz]([1-9][0-9]*)?)\s*<\s*-"
-                r"\s*(?P<variable2>[XYZxyz]([1-9][0-9]*)?)\s*(?P<operation>([+-]\s*1)?)",
-                sentence
+            r"\s*(?P<variable1>[XYZ]([1-9][0-9]*)?)\s*<\s*-"
+            r"\s*(?P<variable2>[XYZ]([1-9][0-9]*)?)\s*(?P<operation>([+-]\s*1)?)",
+            sentence,
+            flags=re.IGNORECASE
         )):
-            if variable_match.group("variable1") != variable_match.group("variable2"):
+            variable: Variable = Variable.compile(variable_match.group("variable1"))
+            if variable != Variable.compile(variable_match.group("variable2")):
                 raise CompilationFailure(f"Failed to compile sentence (used two different variables in sentence): "
                                          f"\"{sentence}\"")
-            return Sentence(VariableCommand(Variable.compile(variable_match.group("variable1")),
+            return Sentence(VariableCommand(variable,
                                             VariableCommandType.compile(variable_match.group("operation"))))
         else:
             raise CompilationFailure(f"Failed to compile sentence: \"{sentence}\"")
@@ -191,6 +216,9 @@ class Sentence:
             )
         )
 
+    def __str__(self) -> str:
+        return str(self.command)
+
 
 @dataclasses.dataclass(frozen=True)
 class Instruction:
@@ -200,14 +228,15 @@ class Instruction:
     @staticmethod
     def compile(line: str) -> "Instruction":
         instruction_match: typing.Optional[re.Match] = re.fullmatch(
-            r"\s*(\[\s*(?P<label>[A-Ea-e]([1-9][0-9]*)?)\s*])?\s*(?P<sentence>.*)\s*",
-            line
+            r"\s*(\[\s*(?P<label>[A-E]([1-9][0-9]*)?)\s*])?\s*(?P<sentence>.*)\s*",
+            line,
+            flags=re.IGNORECASE
         )
 
         if not instruction_match:
             raise CompilationFailure(f"Failed to compile instruction: \"{line}\"")
-        return Instruction(Label.compile(instruction_match.group("label"))
-                           if instruction_match.group("label")
+        return Instruction(Label.compile(label)
+                           if (label := instruction_match.group("label"))
                            else
                            None,
                            Sentence.compile(instruction_match.group("sentence")))
@@ -237,18 +266,52 @@ class Instruction:
             Sentence.decode(((encoded_instruction // (2 ** factorization.get(2, 0))) - 1) // 2)
         )
 
+    def __str__(self) -> str:
+        return (f"[{str(self.label)}] " if self.label is not None else "") + str(self.sentence)
+
 
 @dataclasses.dataclass(frozen=True)
 class Program:
     instructions: list[Instruction]
 
     @staticmethod
-    def compile(*s_program: str) -> "Program":
+    def compile(*s_program: str,
+                sugars: typing.Optional[list["SyntacticSugar"]] = None) -> "Program":
+        if sugars is None:
+            sugars = []
         s_program_lines = s_program if len(s_program) > 1 else s_program[0].splitlines()
-        instructions: list[Instruction] = [
-            Instruction.compile(line)
-            for line in s_program_lines
-        ]
+
+        @dataclasses.dataclass
+        class SugarJob:
+            sugar: SyntacticSugar
+            sugar_invocation: str
+            index_to_inject: int
+
+        sugar_jobs: list[SugarJob] = []
+        instructions: list[Instruction] = []
+        for line in s_program_lines:
+            try:
+                instructions.append(Instruction.compile(line))
+            except CompilationFailure as compilation_failure:
+                any_sugar_valid: bool = False
+                for sugar in sugars:
+                    if sugar.validate_invocation(line):
+                        any_sugar_valid = True
+                        sugar_jobs.append(SugarJob(sugar, line, len(instructions)))
+                        break
+                if not any_sugar_valid:
+                    raise compilation_failure
+
+        for sugar_job_index, sugar_job in enumerate(sugar_jobs):
+            instructions_to_inject: list[Instruction] = sugar_job.sugar.compile(sugar_job.sugar_invocation,
+                                                                                instructions)
+            for instruction_index, instruction_to_inject in enumerate(instructions_to_inject):
+                instructions.insert(sugar_job.index_to_inject + instruction_index,
+                                    instruction_to_inject)
+            sugar_job_index += 1
+            while sugar_job_index < len(sugar_jobs):
+                sugar_jobs[sugar_job_index].index_to_inject += len(instructions_to_inject)
+                sugar_job_index += 1
 
         if (instructions[-1].label is None and
                 type(instructions[-1].sentence.command) is VariableCommand and
@@ -279,3 +342,243 @@ class Program:
     def __add__(self,
                 other: "Program") -> "Program":
         return Program(self.instructions + other.instructions)
+
+    def __str__(self) -> str:
+        max_sentence_indentation: int = max(
+            len(re.match(r"(\[.*])?\s*", str(instruction)).group())
+            for instruction in self.instructions
+        )
+
+        return "\n".join(
+            (start := re.match(r"(\[.*])?\s*", str(instruction)).group()) +
+            (max_sentence_indentation - len(start)) * " " +
+            str(instruction.sentence)
+            for instruction in self.instructions
+        )
+
+
+class SyntacticSugar:
+    def __init__(self,
+                 usage: str,
+                 *implementation: str,
+                 sugars: typing.Optional[list["SyntacticSugar"]] = None):
+        if sugars is None:
+            sugars = []
+            r"()[]{}?*+-|^$\\.&~# \t\n\r\v\f"
+        usage = re.sub(r"(?P<special_char>[*+\-|^\\&~#])",
+                       r"\\\g<special_char>",
+                       usage.strip())
+        self.invocation_arguments: list[tuple[typing.Union[typing.Type[Label], typing.Type[Variable]], str]] = [
+            (
+                {
+                    Label.__name__.lower(): Label,
+                    Variable.__name__.lower(): Variable,
+                    "Const".lower(): int
+                }[match.group("type").lower()],
+                match.group("variable_name").upper()
+            )
+            for match in re.finditer(r"{\s*(?P<type>(Const|" + Label.__name__ + r"|" + Variable.__name__ + r"))\s+" +
+                                     r"(?P<variable_name>[A-Z]([A-Z]|\d)*)\s*}",
+                                     usage,
+                                     flags=re.IGNORECASE)
+        ]
+        self.invocation_regex: str = re.sub(r"{\s*(" + Label.__name__ + r"|" + Variable.__name__ + r")\s+" +
+                                            r"(?P<argument_name>[A-Z]([A-Z]|\d)*)\s*}",
+                                            r"(?P<\g<argument_name>>[A-Z]([A-Z]|\\d)*)",
+                                            usage,
+                                            flags=re.IGNORECASE)
+        self.invocation_regex: str = re.sub(r"{\s*Const\s+(?P<argument_name>[A-Z]([A-Z]|\d)*)\s*}",
+                                            r"(?P<\g<argument_name>>\\d+)",
+                                            self.invocation_regex,
+                                            flags=re.IGNORECASE)
+        self.invocation_regex = (
+            r"\s*(\[(?P<__sugar_label>[A-E]([1-9][0-9]*)?)\])?\s*" +
+            re.sub(r"\s+",
+                   r"\\s*",
+                   self.invocation_regex) +
+            r"\s*"
+        )
+
+        self.implementation: tuple[str] = implementation
+        repeat_counter: int = 0
+        for line in self.implementation:
+            if re.fullmatch(r"\s*REPEAT\s*{.*}\s*",
+                            line,
+                            flags=re.IGNORECASE):
+                repeat_counter += 1
+            elif re.fullmatch(r"\s*END\s+REPEAT\s*",
+                              line,
+                              flags=re.IGNORECASE):
+                if repeat_counter == 0:
+                    raise CompilationFailure("No 'REPEAT' for matching 'END REPEAT'!")
+                repeat_counter -= 1
+        if repeat_counter > 0:
+            raise CompilationFailure("No 'END REPEAT' for matching 'REPEAT'!")
+        self.sugars: list[SyntacticSugar] = sugars
+
+    class VariableGenerator:
+        def __init__(self,
+                     other_instructions: list[Instruction]):
+            self.unused_variable_index: int = max(
+                (
+                    instruction.sentence.command.variable.index
+                    for instruction in other_instructions
+                ),
+                default=0
+            ) + 1
+
+        def generate(self,
+                     starting_index: int = 0) -> Variable:
+            variable: Variable = Variable("Z", starting_index + self.unused_variable_index)
+            self.unused_variable_index += 1
+            return variable
+
+    class LabelGenerator:
+        def __init__(self,
+                     other_instructions: list[Instruction]):
+            self.unused_label_index: int = max(
+                max(
+                    (
+                        instruction.sentence.command.label.index
+                        for instruction in other_instructions
+                        if type(instruction.sentence.command) is JumpCommand
+                    ),
+                    default=0
+                ),
+                max(
+                    (
+                        instruction.label.index
+                        for instruction in other_instructions
+                        if instruction.label is not None
+                    ),
+                    default=0
+                )
+            ) + 1
+
+        def generate(self,
+                     starting_index: int = 0) -> Label:
+            label: Label = Label("A", starting_index + self.unused_label_index)
+            self.unused_label_index += 1
+            return label
+
+    def validate_invocation(self,
+                            invocation: str) -> bool:
+        return bool(re.fullmatch(self.invocation_regex,
+                                 invocation,
+                                 flags=re.IGNORECASE))
+
+    def compile(self,
+                invocation: str,
+                other_instructions: typing.Optional[list[Instruction]] = None) -> list[Instruction]:
+        if other_instructions is None:
+            other_instructions = []
+
+        if invocation_match := re.fullmatch(self.invocation_regex,
+                                            invocation,
+                                            flags=re.IGNORECASE):
+            if invocation_match.group("__sugar_label") is not None:
+                other_instructions += [
+                    Instruction(Label.compile(invocation_match.group("__sugar_label")),
+                                Sentence(VariableCommand(Variable("Y"), VariableCommandType.NoOp)))
+                ]
+            variable_generator: SyntacticSugar.VariableGenerator = SyntacticSugar.VariableGenerator(other_instructions)
+            label_generator: SyntacticSugar.LabelGenerator = SyntacticSugar.LabelGenerator(other_instructions)
+            fixes_to_perform: dict[typing.Union[Label, Variable], typing.Union[Label, Variable]] = {}
+
+            parameter_replacements: dict[str, str] = {}
+            sugar_program_instructions: list[str] = []
+            max_sugar_internals: int = 1000000000000000
+            # Code smell due to the way the algorithm works with the sugar arguments (replacing them at the start
+            # and fixing them later alongside the other variables)
+            repeat_counters: list[int] = []
+            repeat_start_indices: list[int] = []
+            line_index: int = 0
+            while line_index < len(self.implementation):
+                if repeat_match := re.fullmatch(r"\s*REPEAT\s*{\s*(?P<const_name>[A-Z]([A-Z]|\d)*)\s*}\s*",
+                                                self.implementation[line_index],
+                                                flags=re.IGNORECASE):
+                    line_index += 1
+                    repeat_counters.append(int(invocation_match.group(repeat_match.group("const_name"))))
+                    repeat_start_indices.append(line_index)
+                elif re.fullmatch(r"\s*END\s+REPEAT\s*",
+                                  self.implementation[line_index],
+                                  flags=re.IGNORECASE):
+                    repeat_counters[-1] -= 1
+                    if repeat_counters[-1] == 0:
+                        repeat_counters.pop()
+                        repeat_start_indices.pop()
+                        line_index += 1
+                    else:
+                        line_index = repeat_start_indices[-1]
+                else:
+                    line: str = self.implementation[line_index]
+                    for invocation_argument_type, invocation_argument_name in self.invocation_arguments:
+                        if invocation_argument_type is Label or invocation_argument_type is Variable:
+                            invocation_parameter: str = invocation_match.group(invocation_argument_name)
+
+                            if invocation_parameter not in parameter_replacements:
+                                if invocation_argument_type is Label:
+                                    generated_label: Label = label_generator.generate(max_sugar_internals)
+                                    parameter_replacements[invocation_parameter]: str = str(generated_label)
+                                    fixes_to_perform[generated_label] = Label.compile(invocation_parameter)
+                                else:
+                                    generated_variable: Variable = variable_generator.generate(max_sugar_internals)
+                                    parameter_replacements[invocation_parameter]: str = str(generated_variable)
+                                    fixes_to_perform[generated_variable] = Variable.compile(invocation_parameter)
+
+                            line = re.sub(r"{\s*" + invocation_argument_name + r"\s*}",
+                                          parameter_replacements[invocation_parameter],
+                                          line,
+                                          flags=re.IGNORECASE)
+                    sugar_program_instructions.append(line)
+                    line_index += 1
+
+            sugar_program: Program = Program.compile(*sugar_program_instructions,
+                                                     sugars=self.sugars)
+
+            for instruction in sugar_program.instructions:
+                if (
+                    instruction.label is not None and
+                    instruction.label not in fixes_to_perform
+                ):
+                    fixes_to_perform[instruction.label] = label_generator.generate()
+                if (
+                    type(instruction.sentence.command) is JumpCommand and
+                    instruction.sentence.command.label not in fixes_to_perform
+                ):
+                    fixes_to_perform[instruction.sentence.command.label] = label_generator.generate()
+                if (
+                    instruction.sentence.command.variable.name not in {"X", "Y"} and
+                    instruction.sentence.command.variable not in fixes_to_perform
+                ):
+                    fixes_to_perform[instruction.sentence.command.variable] = variable_generator.generate()
+
+            return (
+                []
+                if (sugar_label := invocation_match.group("__sugar_label")) is None
+                else
+                [Instruction(
+                    Label.compile(sugar_label),
+                    Sentence(VariableCommand(
+                        Variable("Y"),
+                        VariableCommandType.NoOp
+                    ))
+                )]
+            ) + [
+                Instruction(
+                    fixes_to_perform.get(instruction.label, instruction.label),
+                    Sentence(
+                        JumpCommand(fixes_to_perform.get(instruction.sentence.command.variable,
+                                                         instruction.sentence.command.variable),
+                                    fixes_to_perform.get(instruction.sentence.command.label,
+                                                         instruction.sentence.command.label))
+                        if type(instruction.sentence.command) is JumpCommand
+                        else
+                        VariableCommand(fixes_to_perform.get(instruction.sentence.command.variable,
+                                                             instruction.sentence.command.variable),
+                                        instruction.sentence.command.command_type)
+                    )
+                )
+                for instruction in sugar_program.instructions
+            ]
+        raise CompilationFailure(f"Failed using sugar to compile line: '{invocation}'")
