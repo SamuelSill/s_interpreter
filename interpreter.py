@@ -86,14 +86,14 @@ def main() -> None:
     from argparse import ArgumentParser, Namespace
 
     argument_parser: ArgumentParser = ArgumentParser(description="S Compiler")
-    argument_parser.add_argument("-b",
-                                 "--binary",
-                                 type=str,
-                                 help="Binary file to run")
     argument_parser.add_argument("x",
                                  type=int,
                                  nargs="+",
                                  help="The program's input")
+    argument_parser.add_argument("-b",
+                                 "--binary",
+                                 type=str,
+                                 help="Binary file to run")
     arguments: Namespace = argument_parser.parse_args()
 
     with open(arguments.binary, "r") as binary_file:

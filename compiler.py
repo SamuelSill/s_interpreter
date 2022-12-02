@@ -645,7 +645,7 @@ def main() -> None:
     for line_index, line in enumerate(file_to_compile_content):
         if re.fullmatch(r"\s*", line):
             pass
-        elif title_match := re.fullmatch(r"\s*!\s*(?P<title>.*)\s*", line):
+        elif title_match := re.fullmatch(r"\s*>\s*(?P<title>.*)\s*", line):
             if is_main:
                 raise CompilationFailure(f"Encountered sugar title after MAIN: '{line}'")
 
