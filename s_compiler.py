@@ -235,8 +235,8 @@ class Instruction:
 
         if not instruction_match:
             raise CompilationFailure(f"Failed to compile instruction: \"{line}\"")
-        return Instruction(Label.compile(instruction_match.group("label"))
-                           if instruction_match.group("label")
+        return Instruction(Label.compile(label)
+                           if (label := instruction_match.group("label"))
                            else
                            None,
                            Sentence.compile(instruction_match.group("sentence")))
@@ -371,11 +371,11 @@ class SyntacticSugar:
         self.invocation_arguments: list[tuple[typing.Union[typing.Type[Label], typing.Type[Variable]], str]] = [
             (
                 {
-                    Label.__name__: Label,
-                    Variable.__name__: Variable,
-                    "Const": int
-                }[match.group("type")],
-                match.group("variable_name")
+                    Label.__name__.lower(): Label,
+                    Variable.__name__.lower(): Variable,
+                    "Const".lower(): int
+                }[match.group("type").lower()],
+                match.group("variable_name").upper()
             )
             for match in re.finditer(r"{\s*(?P<type>(Const|" + Label.__name__ + r"|" + Variable.__name__ + r"))\s+" +
                                      r"(?P<variable_name>[A-Z]([A-Z]|\d)*)\s*}",
@@ -505,8 +505,8 @@ class SyntacticSugar:
                                   flags=re.IGNORECASE):
                     repeat_counters[-1] -= 1
                     if repeat_counters[-1] == 0:
-                        repeat_counters.pop(-1)
-                        repeat_start_indices.pop(-1)
+                        repeat_counters.pop()
+                        repeat_start_indices.pop()
                         line_index += 1
                     else:
                         line_index = repeat_start_indices[-1]
@@ -555,10 +555,10 @@ class SyntacticSugar:
 
             return (
                 []
-                if invocation_match.group("__sugar_label") is None
+                if (sugar_label := invocation_match.group("__sugar_label")) is None
                 else
                 [Instruction(
-                    Label.compile(invocation_match.group("__sugar_label")),
+                    Label.compile(sugar_label),
                     Sentence(VariableCommand(
                         Variable("Y"),
                         VariableCommandType.NoOp
@@ -581,3 +581,4 @@ class SyntacticSugar:
                 )
                 for instruction in sugar_program.instructions
             ]
+        raise CompilationFailure(f"Failed using sugar to compile line: '{invocation}'")
