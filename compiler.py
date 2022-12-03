@@ -448,7 +448,7 @@ class SyntacticSugar:
     class _VariableGenerator:
         def __init__(self,
                      other_instructions: list[Instruction]):
-            self.unused_variable_index: int = max(
+            self.__unused_variable_index: int = max(
                 (
                     instruction.sentence.command.variable.index
                     for instruction in other_instructions
@@ -458,14 +458,14 @@ class SyntacticSugar:
 
         def generate(self,
                      starting_index: int = 0) -> Variable:
-            variable: Variable = Variable("Z", starting_index + self.unused_variable_index)
-            self.unused_variable_index += 1
+            variable: Variable = Variable("Z", starting_index + self.__unused_variable_index)
+            self.__unused_variable_index += 1
             return variable
 
     class _LabelGenerator:
         def __init__(self,
                      other_instructions: list[Instruction]):
-            self.unused_label_index: int = max(
+            self.__unused_label_index: int = max(
                 max(
                     (
                         instruction.sentence.command.label.index
@@ -486,8 +486,8 @@ class SyntacticSugar:
 
         def generate(self,
                      starting_index: int = 0) -> Label:
-            label: Label = Label("A", starting_index + self.unused_label_index)
-            self.unused_label_index += 1
+            label: Label = Label("A", starting_index + self.__unused_label_index)
+            self.__unused_label_index += 1
             return label
 
     def validate(self,
@@ -506,13 +506,15 @@ class SyntacticSugar:
 
         if other_instructions is None:
             other_instructions = []
+        else:
+            other_instructions = other_instructions.copy()
 
         if invocation_match := re.fullmatch(self.__invocation_regex,
                                             invocation,
                                             flags=re.IGNORECASE):
-            if invocation_match.group("__sugar_label") is not None:
+            if (sugar_label := invocation_match.group("__sugar_label")) is not None:
                 other_instructions += [
-                    Instruction(Label.compile(invocation_match.group("__sugar_label")),
+                    Instruction(Label.compile(sugar_label),
                                 Sentence(VariableCommand(Variable("Y"), VariableCommandType.NoOp)))
                 ]
             variable_generator: SyntacticSugar._VariableGenerator = SyntacticSugar._VariableGenerator(
@@ -540,13 +542,13 @@ class SyntacticSugar:
                                   self.__implementation[line_index],
                                   flags=re.IGNORECASE):
                     repeat_counters[-1] -= 1
-                    if repeat_counters[-1] == 0:
+                    if repeat_counters[-1] <= 0:
                         repeat_counters.pop()
                         repeat_start_indices.pop()
                         line_index += 1
                     else:
                         line_index = repeat_start_indices[-1]
-                else:
+                elif len(repeat_counters) == 0 or repeat_counters[-1] > 0:
                     line: str = self.__implementation[line_index]
                     for invocation_argument_type, invocation_argument_name in self.__invocation_arguments:
                         invocation_parameter: str = invocation_match.group(invocation_argument_name)
@@ -567,6 +569,8 @@ class SyntacticSugar:
                                       line,
                                       flags=re.IGNORECASE)
                     sugar_program_instructions.append(line)
+                    line_index += 1
+                else:
                     line_index += 1
 
             sugar_program: Program = Program.compile(*sugar_program_instructions,
@@ -591,7 +595,7 @@ class SyntacticSugar:
 
             return (
                 []
-                if (sugar_label := invocation_match.group("__sugar_label")) is None
+                if sugar_label is None
                 else
                 [Instruction(
                     Label.compile(sugar_label),
