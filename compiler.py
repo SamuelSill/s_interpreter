@@ -397,36 +397,44 @@ class SyntacticSugar:
         usage = re.sub(r"(?P<special_char>[*+\-|^\\&~#])",
                        r"\\\g<special_char>",
                        usage.strip())
-        self.__invocation_arguments: list[tuple[Union[Type[Label], Type[Variable]], str]] = [
-            (
-                {
-                    Label.__name__.lower(): Label,
-                    Variable.__name__.lower(): Variable,
-                    "Const".lower(): int
-                }[match.group("type").lower()],
-                match.group("variable_name").upper()
-            )
+        self.__invocation_arguments: dict[str, Union[Type[Label], Type[Variable]]] = {
+            match.group("variable_name").upper(): {
+                Label.__name__.lower(): Label,
+                Variable.__name__.lower(): Variable,
+                "Const".lower(): int
+            }[match.group("type").lower()]
             for match in re.finditer(r"{\s*(?P<type>(Const|" + Label.__name__ + r"|" + Variable.__name__ + r"))\s+" +
                                      r"(?P<variable_name>[A-Z]([A-Z]|\d)*)\s*}",
                                      usage,
                                      flags=re.IGNORECASE)
-        ]
-        self.__invocation_regex: str = re.sub(r"{\s*(" + Label.__name__ + r"|" + Variable.__name__ + r")\s+" +
-                                              r"(?P<argument_name>[A-Z]([A-Z]|\d)*)\s*}",
-                                              r"(?P<\g<argument_name>>[A-Z]([A-Z]|\\d)*)",
-                                              usage,
-                                              flags=re.IGNORECASE)
-        self.__invocation_regex: str = re.sub(r"{\s*Const\s+(?P<argument_name>[A-Z]([A-Z]|\d)*)\s*}",
-                                              r"(?P<\g<argument_name>>\\d+)",
-                                              self.__invocation_regex,
-                                              flags=re.IGNORECASE)
-        self.__invocation_regex = (
+        }
+
+        for invocation_argument, _ in self.__invocation_arguments.items():
+            usage = re.sub(r"{\s*(" + Label.__name__ + r"|" + Variable.__name__ + r")\s+" +
+                           invocation_argument + r"\s*}",
+                           r"(?P<" + invocation_argument + r">[A-Z]([A-Z]|\\d)*)",
+                           usage,
+                           count=1,
+                           flags=re.IGNORECASE)
+            usage = re.sub(r"{\s*Const\s+" + invocation_argument + r"\s*}",
+                           r"(?P<" + invocation_argument + r">\\d+)",
+                           usage,
+                           count=1,
+                           flags=re.IGNORECASE)
+        usage = re.sub(r"{\s*(Const|" + Label.__name__ + r"|" + Variable.__name__ + r")\s+" +
+                       r"(?P<argument_name>[A-Z]([A-Z]|\d)*)\s*}",
+                       r"(?P=\g<argument_name>)",
+                       usage,
+                       flags=re.IGNORECASE)
+
+        usage = (
             r"\s*(\[(?P<__sugar_label>[A-E]([1-9][0-9]*)?)\])?\s*" +
-            re.sub(r"\s+",
-                   r"\\s*",
-                   self.__invocation_regex) +
+            re.sub(r"\s+", r"\\s*", usage) +
             r"\s*"
         )
+
+        self.__invocation_regex: re.Pattern[str] = re.compile(usage,
+                                                              flags=re.IGNORECASE)
 
         self.__implementation: tuple[str] = implementation
         repeat_counter: int = 0
@@ -495,8 +503,7 @@ class SyntacticSugar:
         import re
 
         return bool(re.fullmatch(self.__invocation_regex,
-                                 invocation,
-                                 flags=re.IGNORECASE))
+                                 invocation))
 
     def compile(self,
                 invocation: str,
@@ -510,8 +517,7 @@ class SyntacticSugar:
             other_instructions = other_instructions.copy()
 
         if invocation_match := re.fullmatch(self.__invocation_regex,
-                                            invocation,
-                                            flags=re.IGNORECASE):
+                                            invocation):
             if (sugar_label := invocation_match.group("__sugar_label")) is not None:
                 other_instructions += [
                     Instruction(Label.compile(sugar_label),
@@ -550,7 +556,7 @@ class SyntacticSugar:
                         line_index = repeat_start_indices[-1]
                 elif len(repeat_counters) == 0 or repeat_counters[-1] > 0:
                     line: str = self.__implementation[line_index]
-                    for invocation_argument_type, invocation_argument_name in self.__invocation_arguments:
+                    for invocation_argument_name, invocation_argument_type in self.__invocation_arguments.items():
                         invocation_parameter: str = invocation_match.group(invocation_argument_name)
 
                         if invocation_argument_type is Label or invocation_argument_type is Variable:
@@ -645,6 +651,7 @@ def main() -> None:
     current_section_title: str = ""
     sugars: list[SyntacticSugar] = []
     is_main: bool = False
+    is_before_first_sugar: bool = True
 
     for line_index, line in enumerate(file_to_compile_content):
         if re.fullmatch(r"\s*", line):
@@ -653,9 +660,12 @@ def main() -> None:
             if is_main:
                 raise CompilationFailure(f"Encountered sugar title after MAIN: '{line}'")
 
-            sugars.append(SyntacticSugar(current_section_title,
-                                         *current_section_lines,
-                                         sugars=sugars.copy()))
+            if is_before_first_sugar:
+                is_before_first_sugar = False
+            else:
+                sugars.append(SyntacticSugar(current_section_title,
+                                             *current_section_lines,
+                                             sugars=sugars.copy()))
             is_main = bool(re.fullmatch(r"MAIN",
                                         current_section_title := title_match.group("title"),
                                         re.IGNORECASE))
