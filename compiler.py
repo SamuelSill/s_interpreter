@@ -381,6 +381,11 @@ class Program:
         )
 
 
+@_dataclass(frozen=True)
+class Const:
+    value: int
+
+
 class SyntacticSugar:
     from typing import Optional as _Optional
 
@@ -393,31 +398,42 @@ class SyntacticSugar:
 
         if sugars is None:
             sugars = []
-            r"()[]{}?*+-|^$\\.&~# \t\n\r\v\f"
+
+        supported_types_patterns: dict[Type, str] = {
+            Label: r"[A-E]([1-9][0-9]*)?",
+            Variable: r"[XYZ]([1-9][0-9]*)?",
+            Const: r"(([1-9][0-9]*)|0)"
+        }
+
         usage = re.sub(r"(?P<special_char>[*+\-|^\\&~#])",
                        r"\\\g<special_char>",
                        usage.strip())
-        self.__invocation_arguments: dict[str, Union[Type[Label], Type[Variable]]] = {
-            match.group("variable_name").upper(): {
-                Label.__name__.lower(): Label,
-                Variable.__name__.lower(): Variable,
-                "Const".lower(): int
+        self.__invocation_arguments: dict[str, Type] = {}
+        for match in re.finditer(r"{\s*(?P<type>(" +
+                                 r"|".join(actual_type.__name__
+                                           for actual_type in supported_types_patterns) +
+                                 r"))\s+" +
+                                 r"(?P<variable_name>[A-Z]([A-Z]|\d)*)\s*}",
+                                 usage,
+                                 flags=re.IGNORECASE):
+            variable_name: str = match.group("variable_name").upper()
+            variable_type: Type = {
+                supported_type.__name__.lower(): supported_type
+                for supported_type in supported_types_patterns
             }[match.group("type").lower()]
-            for match in re.finditer(r"{\s*(?P<type>(Const|" + Label.__name__ + r"|" + Variable.__name__ + r"))\s+" +
-                                     r"(?P<variable_name>[A-Z]([A-Z]|\d)*)\s*}",
-                                     usage,
-                                     flags=re.IGNORECASE)
-        }
 
-        for invocation_argument, _ in self.__invocation_arguments.items():
-            usage = re.sub(r"{\s*(" + Label.__name__ + r"|" + Variable.__name__ + r")\s+" +
+            if variable_name in self.__invocation_arguments:
+                if self.__invocation_arguments[variable_name] != variable_type:
+                    raise CompilationFailure(f"Sugar back-reference does not maintain the same type "
+                                             f"({self.__invocation_arguments[variable_name]} != {variable_type})")
+            else:
+                self.__invocation_arguments[variable_name] = variable_type
+
+        for invocation_argument, supported_type in self.__invocation_arguments.items():
+            usage = re.sub(r"{\s*" + supported_type.__name__ + r"\s+" +
                            invocation_argument + r"\s*}",
-                           r"(?P<" + invocation_argument + r">[A-Z]([A-Z]|\\d)*)",
-                           usage,
-                           count=1,
-                           flags=re.IGNORECASE)
-            usage = re.sub(r"{\s*Const\s+" + invocation_argument + r"\s*}",
-                           r"(?P<" + invocation_argument + r">\\d+)",
+                           r"(?P<" + invocation_argument + r">" +
+                           supported_types_patterns[supported_type] + r")",
                            usage,
                            count=1,
                            flags=re.IGNORECASE)
@@ -509,7 +525,7 @@ class SyntacticSugar:
                 invocation: str,
                 other_instructions: _Optional[list[Instruction]] = None) -> list[Instruction]:
         import re
-        from typing import Union
+        from typing import Union, Optional
 
         if other_instructions is None:
             other_instructions = []
@@ -518,11 +534,13 @@ class SyntacticSugar:
 
         if invocation_match := re.fullmatch(self.__invocation_regex,
                                             invocation):
+            labeled_instruction: Optional[Instruction] = None
             if (sugar_label := invocation_match.group("__sugar_label")) is not None:
-                other_instructions += [
-                    Instruction(Label.compile(sugar_label),
-                                Sentence(VariableCommand(Variable("Y"), VariableCommandType.NoOp)))
-                ]
+                other_instructions.append(
+                    labeled_instruction := Instruction(Label.compile(sugar_label),
+                                                       Sentence(VariableCommand(Variable("Y"),
+                                                                                VariableCommandType.NoOp)))
+                )
             variable_generator: SyntacticSugar._VariableGenerator = SyntacticSugar._VariableGenerator(
                 other_instructions
             )
@@ -601,15 +619,9 @@ class SyntacticSugar:
 
             return (
                 []
-                if sugar_label is None
+                if labeled_instruction is None
                 else
-                [Instruction(
-                    Label.compile(sugar_label),
-                    Sentence(VariableCommand(
-                        Variable("Y"),
-                        VariableCommandType.NoOp
-                    ))
-                )]
+                [labeled_instruction]
             ) + [
                 Instruction(
                     fixes_to_perform.get(instruction.label, instruction.label),
