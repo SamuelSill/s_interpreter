@@ -394,7 +394,7 @@ class SyntacticSugar:
                  *implementation: str,
                  sugars: _Optional[list["SyntacticSugar"]] = None):
         import re
-        from typing import Union, Type
+        from typing import Type
 
         if sugars is None:
             sugars = []
