@@ -149,7 +149,7 @@ we just look at its index in the following sequence:
 * For example, `A1` = 1, `#C1` = 3 etc.
 
 <ins>Encoding Instructions:</ins> If we wish to encode a given instruction (with or without label), 
-it is encoded as _<a, <b, c>_, where:
+it is encoded as _<a, <b, c>>_, where:
 
 - <ins>**_a_**</ins>:
   - _0_ if the instruction has no label 
