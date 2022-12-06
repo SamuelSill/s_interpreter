@@ -1,34 +1,34 @@
 # S Compiler & Interpreter
 
 ## Table of Contents
-- [The S Language](#The S Language)
-  - [The Model](#The Model)
+- [The S Language](#The-S-Language)
+  - [The Model](#The-Model)
     - [Variables](#Variables)
     - [Labels](#Labels)
     - [Instructions](#Instructions)
-    - [The Program](#The Program)
+    - [The Program](#The-Program)
     - [Example](#Example)
-    - [Syntactic Sugars](#Syntactic Sugars)
+    - [Syntactic Sugars](#Syntactic-Sugars)
   - [Encoding](#Encoding)
     - [PairWise](#PairWise)
     - [ListWise](#ListWise)
-    - [Instruction Encoding](#Instruction Encoding)
-    - [Program Encoding](#Program Encoding)
+    - [Instruction Encoding](#Instruction-Encoding)
+    - [Program Encoding](#Program-Encoding)
   - [Conventions](#Conventions)
-- [The S Compiler](#The S Compiler)
-  - [Compiler Usage](#Compiler Usage)
-  - [Slang Files](#Slang Files)
+- [The S Compiler](#The-S-Compiler)
+  - [Compiler Usage](#Compiler-Usage)
+  - [Slang Files](#Slang-Files)
     - [MAIN](#MAIN)
-    - [Sugar Sections](#Sugar Sections)
-      - [Sugar Types](#Sugar Types)
-      - [REPEAT Statement](#REPEAT Statement)
-      - [The REPEAT Tradeoff](#The REPEAT Tradeoff)
-  - [The Algorithm](#The Algorithm)
-      - [Sugar Parsing](#Sugar Parsing)
-      - [Compiling the Code](#Compiling the Code)
-      - [Sugar Expansion](#Sugar Expansion)
-- [The S Interpreter](#The S Interpreter)
-  - [Interpreter Usage](#Interpreter Usage)
+    - [Sugar Sections](#Sugar-Sections)
+      - [Sugar Types](#Sugar-Types)
+      - [REPEAT Statement](#REPEAT-Statement)
+      - [The REPEAT Tradeoff](#The-REPEAT-Tradeoff)
+  - [The Algorithm](#The-Algorithm)
+      - [Sugar Parsing](#Sugar-Parsing)
+      - [Compiling the Code](#Compiling-the-Code)
+      - [Sugar Expansion](#Sugar-Expansion)
+- [The S Interpreter](#The-S-Interpreter)
+  - [Interpreter Usage](#Interpreter-Usage)
 ## The S Language
 
 ---
@@ -149,7 +149,7 @@ we just look at its index in the following sequence:
 * For example, `A1` = 1, `#C1` = 3 etc.
 
 <ins>Encoding Instructions:</ins> If we wish to encode a given instruction (with or without label), 
-it is encoded as _<a, <b, c>_, where:
+it is encoded as _<a, <b, c>>_, where:
 
 - <ins>**_a_**</ins>:
   - _0_ if the instruction has no label 
