@@ -208,6 +208,8 @@ and between separate words/variables in the same instruction.
 #### MAIN
 The `MAIN` section will contain the actual program you wish to compile.
 
+* Note that the `MAIN` section must appear at the end of the file.
+
 Take the following example:
 
 ```
@@ -242,7 +244,8 @@ We can define and use a syntactic sugar like so:
 This sugar will only be used if we pass it with a valid label.
 * The compiler makes sure that in the compiled output, 
   variable `Z` that was used inside the `GOTO` implementation DOES NOT collide with variable `Z` 
-  if it were used outside the sugar. We are safe to use any temporary variables inside sugar implementations.
+  if it were used outside the sugar. We are safe to use any temporary variables (or labels) inside sugar implementations.
+  The exception to this rule is input/output variables though, as they CAN be manipulated from sugars.
 * A given sugar may only use other sugars that are defined before it in the file.
 * Sugar definitions are allowed to overlap in terms of their usage patterns. 
   The sugar that will eventually be used in the compiled output is the first in the file that matches the string.

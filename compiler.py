@@ -294,6 +294,8 @@ class Program:
     @staticmethod
     def compile(*program: str,
                 sugars: _Optional[list["SyntacticSugar"]] = None) -> "Program":
+        import re
+
         if sugars is None:
             sugars = []
 
@@ -303,15 +305,39 @@ class Program:
             sugar_invocation: str
             index_to_inject: int
 
+        used_variables: set[Variable] = set()
+        used_labels: set[Label] = set()
         sugar_jobs: list[SugarJob] = []
         instructions: list[Instruction] = []
+
+        def update_used_labels_and_variables_by_instruction(*instructions_: Instruction) -> None:
+            for instruction in instructions_:
+                used_variables.add(instruction.sentence.command.variable)
+
+                if instruction.label is not None:
+                    used_labels.add(instruction.label)
+
+                if type(instruction.sentence.command) is JumpCommand:
+                    used_labels.add(instruction.sentence.command.label)
+
         for line in program:
             try:
                 instructions.append(Instruction.compile(line))
+                update_used_labels_and_variables_by_instruction(instructions[-1])
             except CompilationFailure as compilation_failure:
                 any_sugar_valid: bool = False
                 for sugar in sugars:
                     if sugar.validate(line):
+                        for parameter in sugar.parameters(line):
+                            if type(parameter) is Label:
+                                used_labels.add(parameter)
+                            elif type(parameter) is Variable:
+                                used_variables.add(parameter)
+                        if label_match := re.fullmatch(r"\s*\[\s*(?P<sugar_label>[A-E]([1-9][0-9]*)?)\s*].*", line):
+                            used_labels.add(new_label := Label.compile(label_match.group("sugar_label")))
+                            instructions.append(Instruction(new_label,
+                                                            Sentence(VariableCommand(Variable("Y"),
+                                                                                     VariableCommandType.NoOp))))
                         any_sugar_valid = True
                         sugar_jobs.append(SugarJob(sugar, line, len(instructions)))
                         break
@@ -320,7 +346,9 @@ class Program:
 
         for sugar_job_index, sugar_job in enumerate(sugar_jobs):
             instructions_to_inject: list[Instruction] = sugar_job.sugar.compile(sugar_job.sugar_invocation,
-                                                                                instructions)
+                                                                                used_labels,
+                                                                                used_variables)
+            update_used_labels_and_variables_by_instruction(*instructions_to_inject)
             for instruction_index, instruction_to_inject in enumerate(instructions_to_inject):
                 instructions.insert(sugar_job.index_to_inject + instruction_index,
                                     instruction_to_inject)
@@ -387,28 +415,33 @@ class Const:
 
 
 class SyntacticSugar:
-    from typing import Optional as _Optional
+    from typing import (
+        Optional as _Optional,
+        Union as _Union
+    )
 
     def __init__(self,
                  usage: str,
                  *implementation: str,
                  sugars: _Optional[list["SyntacticSugar"]] = None):
         import re
-        from typing import Type
+        from typing import Type, Union
 
         if sugars is None:
             sugars = []
 
-        supported_types_patterns: dict[Type, str] = {
+        supported_types_patterns: dict[Union[Type[Label], Type[Variable], Type[Const]], str] = {
             Label: r"[A-E]([1-9][0-9]*)?",
             Variable: r"[XYZ]([1-9][0-9]*)?",
             Const: r"(([1-9][0-9]*)|0)"
         }
 
+        self.__title: str = usage
+
         usage = re.sub(r"(?P<special_char>[*+\-|^\\&~#])",
                        r"\\\g<special_char>",
                        usage.strip())
-        self.__invocation_arguments: dict[str, Type] = {}
+        self.__invocation_arguments: dict[str, Union[Type[Const], Type[Variable], Type[Label]]] = {}
         for match in re.finditer(r"{\s*(?P<type>(" +
                                  r"|".join(actual_type.__name__
                                            for actual_type in supported_types_patterns) +
@@ -417,7 +450,7 @@ class SyntacticSugar:
                                  usage,
                                  flags=re.IGNORECASE):
             variable_name: str = match.group("variable_name").upper()
-            variable_type: Type = {
+            variable_type: Union[Type[Const], Type[Label], Type[Variable]] = {
                 supported_type.__name__.lower(): supported_type
                 for supported_type in supported_types_patterns
             }[match.group("type").lower()]
@@ -444,7 +477,7 @@ class SyntacticSugar:
                        flags=re.IGNORECASE)
 
         usage = (
-            r"\s*(\[(?P<__sugar_label>[A-E]([1-9][0-9]*)?)\])?\s*" +
+            r"\s*(\[[A-E]([1-9][0-9]*)?\])?\s*" +
             re.sub(r"\s+", r"\\s*", usage) +
             r"\s*"
         )
@@ -471,14 +504,10 @@ class SyntacticSugar:
 
     class _VariableGenerator:
         def __init__(self,
-                     other_instructions: list[Instruction]):
-            self.__unused_variable_index: int = max(
-                (
-                    instruction.sentence.command.variable.index
-                    for instruction in other_instructions
-                ),
-                default=0
-            ) + 1
+                     other_variables: set[Variable]):
+            self.__unused_variable_index: int = max((variable.index
+                                                     for variable in other_variables),
+                                                    default=0) + 1
 
         def generate(self,
                      starting_index: int = 0) -> Variable:
@@ -488,25 +517,9 @@ class SyntacticSugar:
 
     class _LabelGenerator:
         def __init__(self,
-                     other_instructions: list[Instruction]):
-            self.__unused_label_index: int = max(
-                max(
-                    (
-                        instruction.sentence.command.label.index
-                        for instruction in other_instructions
-                        if type(instruction.sentence.command) is JumpCommand
-                    ),
-                    default=0
-                ),
-                max(
-                    (
-                        instruction.label.index
-                        for instruction in other_instructions
-                        if instruction.label is not None
-                    ),
-                    default=0
-                )
-            ) + 1
+                     other_labels: set[Label]):
+            self.__unused_label_index: int = max((label.index for label in other_labels),
+                                                 default=0) + 1
 
         def generate(self,
                      starting_index: int = 0) -> Label:
@@ -521,30 +534,26 @@ class SyntacticSugar:
         return bool(re.fullmatch(self.__invocation_regex,
                                  invocation))
 
+    @property
+    def title(self) -> str:
+        return self.__title
+
+    def __str__(self) -> str:
+        return self.__title
+
     def compile(self,
                 invocation: str,
-                other_instructions: _Optional[list[Instruction]] = None) -> list[Instruction]:
+                other_labels: _Optional[set[Label]] = None,
+                other_variables: _Optional[set[Variable]] = None) -> list[Instruction]:
         import re
-        from typing import Union, Optional
+        from typing import Union
 
-        if other_instructions is None:
-            other_instructions = []
-        else:
-            other_instructions = other_instructions.copy()
+        other_labels = set() if other_labels is None else other_labels.copy()
+        other_variables = set() if other_variables is None else other_variables.copy()
 
-        if invocation_match := re.fullmatch(self.__invocation_regex,
-                                            invocation):
-            labeled_instruction: Optional[Instruction] = None
-            if (sugar_label := invocation_match.group("__sugar_label")) is not None:
-                other_instructions.append(
-                    labeled_instruction := Instruction(Label.compile(sugar_label),
-                                                       Sentence(VariableCommand(Variable("Y"),
-                                                                                VariableCommandType.NoOp)))
-                )
-            variable_generator: SyntacticSugar._VariableGenerator = SyntacticSugar._VariableGenerator(
-                other_instructions
-            )
-            label_generator: SyntacticSugar._LabelGenerator = SyntacticSugar._LabelGenerator(other_instructions)
+        if invocation_match := re.fullmatch(self.__invocation_regex, invocation):
+            variable_generator: SyntacticSugar._VariableGenerator = SyntacticSugar._VariableGenerator(other_variables)
+            label_generator: SyntacticSugar._LabelGenerator = SyntacticSugar._LabelGenerator(other_labels)
             fixes_to_perform: dict[Union[Label, Variable], Union[Label, Variable]] = {}
 
             parameter_replacements: dict[str, str] = {}
@@ -617,12 +626,7 @@ class SyntacticSugar:
                 ):
                     fixes_to_perform[instruction.sentence.command.variable] = variable_generator.generate()
 
-            return (
-                []
-                if labeled_instruction is None
-                else
-                [labeled_instruction]
-            ) + [
+            return [
                 Instruction(
                     fixes_to_perform.get(instruction.label, instruction.label),
                     Sentence(
@@ -641,6 +645,18 @@ class SyntacticSugar:
             ]
         raise CompilationFailure(f"Failed using sugar to compile line: '{invocation}'")
 
+    def parameters(self,
+                   invocation: str) -> list[_Union[Label, Variable]]:
+        import re
+
+        if invocation_match := re.fullmatch(self.__invocation_regex, invocation):
+            return [
+                invocation_argument_type.compile(invocation_match.group(invocation_argument_name))
+                for invocation_argument_name, invocation_argument_type in self.__invocation_arguments.items()
+                if invocation_argument_type in {Label, Variable}
+            ]
+        raise CompilationFailure(f"Failed to determine sugar parameters of: '{invocation}'")
+
 
 def main() -> None:
     from argparse import ArgumentParser, Namespace
@@ -653,7 +669,13 @@ def main() -> None:
     argument_parser.add_argument("-o",
                                  "--output",
                                  type=str,
-                                 help="Output program file")
+                                 help="Output binary file",
+                                 default=None)
+    argument_parser.add_argument("--encode",
+                                 action="store_true",
+                                 help="If existent, print out the encoding of the program.\n"
+                                      "NOTE: DO NOT use this flag for large binaries as it can "
+                                      "result in VERY SLOW calculations")
     arguments: Namespace = argument_parser.parse_args()
 
     with open(arguments.filename, "r") as file_to_compile:
@@ -666,7 +688,7 @@ def main() -> None:
     is_before_first_sugar: bool = True
 
     for line_index, line in enumerate(file_to_compile_content):
-        if re.fullmatch(r"\s*", line):
+        if re.fullmatch(r"\s*(#(\s|.)*)?\s*", line):
             pass
         elif title_match := re.fullmatch(r"\s*>\s*(?P<title>.*)\s*", line):
             if is_main:
@@ -679,18 +701,27 @@ def main() -> None:
                                              *current_section_lines,
                                              sugars=sugars.copy()))
             is_main = bool(re.fullmatch(r"MAIN",
-                                        current_section_title := title_match.group("title"),
+                                        current_section_title := title_match.group("title").split("#")[0],
                                         re.IGNORECASE))
             current_section_lines = []
         elif line_match := re.fullmatch(r"\s*(?P<line>.*)\s*", line):
-            current_section_lines.append(line_match.group("line"))
+            current_section_lines.append(line_match.group("line").split("#")[0])
         else:
             raise CompilationFailure(f"Failed to compile line {line_index}: '{line}'")
 
-    program: str = str(Program.compile(*current_section_lines, sugars=sugars))
+    compiled_program: Program = Program.compile(*current_section_lines, sugars=sugars)
+    program: str = str(compiled_program)
 
-    with open(arguments.output, "w") as output_file:
-        output_file.write(program)
+    if arguments.output:
+        with open(arguments.output, "w") as output_file:
+            output_file.write(program)
+
+        print(f"Compiled program to binary '{arguments.output}'.")
+
+    print(f"The program consists of {len(compiled_program.instructions)} instructions.")
+
+    if arguments.encode:
+        print(f"It encodes to the value of {compiled_program.encode()}.")
 
 
 if __name__ == '__main__':

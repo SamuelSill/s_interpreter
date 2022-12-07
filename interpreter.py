@@ -11,7 +11,8 @@ class Interpreter:
     def __init__(self,
                  program: _compiler.Program):
         self.__program: _compiler.Program = program
-        self.__instruction_index = 0
+        self.__instruction_index: int = 0
+        self.__instructions_performed: int = 0
         self.__label_map: dict[_compiler.Label, int] = {}
         for instruction_index, instruction in enumerate(self.__program.instructions):
             if instruction.label is not None and instruction.label not in self.__label_map:
@@ -34,6 +35,10 @@ class Interpreter:
     def variables(self) -> dict[str, int]:
         return {str(key): value for key, value in self.__variables.items()}
 
+    @property
+    def instructions_performed(self) -> int:
+        return self.__instructions_performed
+
     def step(self) -> _Optional[int]:
         if self.__instruction_index < len(self.__program.instructions):
             current_instruction: _compiler.Instruction = self.__program.instructions[self.__instruction_index]
@@ -54,6 +59,8 @@ class Interpreter:
                       self.__variables[current_instruction.sentence.command.variable] > 0):
                     self.__variables[current_instruction.sentence.command.variable] -= 1
 
+            self.__instructions_performed += 1
+
         if self.__instruction_index == len(self.__program.instructions):
             return self.__variables[_compiler.Variable("Y", 1)]
 
@@ -72,6 +79,7 @@ class Interpreter:
 
         self.__variables[_compiler.Variable("Y", 1)] = 0
         self.__instruction_index = 0
+        self.__instructions_performed = 0
 
     def run(self,
             *x: int) -> int:
@@ -84,21 +92,33 @@ class Interpreter:
 
 def main() -> None:
     from argparse import ArgumentParser, Namespace
+    from json import dumps
 
     argument_parser: ArgumentParser = ArgumentParser(description="S Compiler")
     argument_parser.add_argument("x",
                                  type=int,
-                                 nargs="+",
+                                 nargs="*",
                                  help="The program's input")
     argument_parser.add_argument("-b",
                                  "--binary",
                                  type=str,
                                  help="Binary file to run")
+    argument_parser.add_argument("--run_info",
+                                 action="store_true",
+                                 help="Pass this flag to print additional info in the end of the program")
     arguments: Namespace = argument_parser.parse_args()
 
     with open(arguments.binary, "r") as binary_file:
         binary_file_content: list[str] = binary_file.readlines()
-    print(Interpreter(_compiler.Program.compile(*binary_file_content)).run(*arguments.x))
+
+    interpreter: Interpreter = Interpreter(_compiler.Program.compile(*binary_file_content))
+    print(f"Output: {interpreter.run(*arguments.x)}")
+
+    if arguments.run_info:
+        print(f"The interpreter ran {interpreter.instructions_performed} instructions.")
+        print("The variable values:\n" +
+              "\n".join(f"\t{variable_name} = {variable_value}"
+                        for variable_name, variable_value in interpreter.variables.items()))
 
 
 if __name__ == '__main__':
