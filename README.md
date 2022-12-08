@@ -26,7 +26,7 @@
       - [The Pitfalls of Sugars](#The-Pitfalls-of-Sugars)
         - [Sugar Argument Edge Cases](#Sugar-Argument-Edge-Cases)
         - [Sugar Internal Variables](#Sugar-Internal-Variables)
-  - [The Algorithm](#The-Algorithm)
+  - [The Compiler's Algorithm](#The-Compiler's-Algorithm)
       - [Sugar Parsing](#Sugar-Parsing)
       - [Compiling the Code](#Compiling-the-Code)
       - [Sugar Expansion](#Sugar-Expansion)
@@ -195,10 +195,15 @@ In short, it allows us to easily compile `slang` files to binaries that the `S I
 
 ### Compiler Usage
 To compile a given `slang` file to a binary file, run the following command:
-
 ```
 python compiler.py <slang-file-path> -o <binary-file-path>
 ```
+You could also pass an additional flag to print the encoding of the program like so:
+```
+python compiler.py <slang-file-path> -o <binary-file-path> --encode
+```
+But be careful, as program encodings can grow incredibly large even with very few instructions, 
+so the compiler could throw an error instead.
 ### Slang Files
 In order to compile `S Language` code, 
 we write it in `.slang` files as a convention.
@@ -247,7 +252,7 @@ A few details to notice:
 * Notice that in the definition of the sugar, we specified the type of `L`.
 This sugar will only be used if we pass it with a valid label.
 * The compiler makes sure that after it expands the `GOTO` sugar,
-  variable `Z` that was used inside the `GOTO` implementation DOES NOT collide with variable `Z`
+  variable `Z` that was used inside the `GOTO` implementation **DOES NOT** collide with variable `Z`
   if it were used outside the sugar.
   We are safe to use any temporary variables (or labels) inside sugar implementations.
   The exception to this rule is input/output variables though, as they CAN be manipulated from sugars.
@@ -322,13 +327,13 @@ of a `Python` function, there should be no problem!
 But if we do that, we might aswell write our code in `Python` or some other high level language instead of `S`.
 
 So that is why consts only support the `REPEAT` keyword.
-Any more keyword that we add will remove us of the challenge of writing in `S`, and defeat the purpose altogether.
+Any additional keyword that we add will remove us of the challenge of writing in `S`, and defeat the purpose altogether.
 
 You can still do meta-programming in `S` if you want though. Just not with consts 
 (as `S` does not natively support them).
 ##### The Pitfalls of Sugars
 ###### Sugar Argument Edge Cases
-Suppose you've implemented the sugar `{Variable V} += {Const K}` and `{Variable V1} -= {Variable V2}` correctly, 
+Suppose you've implemented the sugars `{Variable V} <- {Const K}` and `{Variable V1} -= {Variable V2}` correctly, 
 and you wish to use them to implement the sugar `{Variable OUT} <- {Const K} - {Variable V}`.
 
 Well, the straightforward approach is to implement it like so:
@@ -345,7 +350,7 @@ It would expand to:
 Z <- 100
 Z -= Z
 ```
-No matter the initial value of `Z`, the given lines will make it `0`!
+No matter the initial value of `Z`, the given lines will set it to `0`!
 
 So let's fix the case for when `V` is the same variable as `OUT`:
 
@@ -374,19 +379,20 @@ Well we can add an exception to this case! We can overload the sugar like so:
 ```
 The order here **MATTERS**!
 As explained previously, the sugar chosen to expand a given line will be the **first in the file** that matches it.
-If declared the other way around, the more general-case sugar will take place always, 
+If declared the other way around, the more general-case sugar will always take place, 
 and we'll be left with the same bug we started with.
 ###### Sugar Internal Variables
 Suppose you wished to initialize a given variable `Z` to `5` in the `MAIN` section.
 
-You could simply write it as `Z <- Z + 1` `5` times. After all, `Z` is initialized with `0`.
+You could simply write it as `Z <- Z + 1` `5` times. After all, `Z` is initialized to `0`, 
+so we don't need to set it to `0` before-hand.
 
-That would work just fine, but what about sugars?
+But what about sugars?
 You might think that it's safe to do the same with sugars, as the compiler gurantees
 that the sugar's internal variables are not used anywhere else in the program.
 
 Well, while you may be right that the compiler takes care of us 
-with regard to the uniqueness of the variables used in the sugar, a problem still may occur 
+with regard to the uniqueness of the variables, a problem amy still occur 
 if the sugar is used inside a loop.
 
 Let's see an example.
@@ -404,7 +410,7 @@ Let's look at the following code:
       IF X != 0 GOTO A
 ```
 You would assume for input `X = 2` the value of `Y` would be `1`.
-But it would actually be `2`, as the lines that `Y <- 1` expands, work with the same variable, 
+But it would actually be `2`, as the lines that `Y <- 1` is expanded to work with the same variable, 
 whatever the compiler may choose it to be.
 
 Of course this issue would not be present if we were to write our `MAIN` section like so:
@@ -414,7 +420,7 @@ Of course this issue would not be present if we were to write our `MAIN` section
     Y <- 1
 ```
 This code will in fact always return 1, as the two lines expand to different lines, 
-hence with different variables.
+hence with different `Z` variables.
 
 Sugar local variables may seem to behave like static variables initialized to `0` at first, 
 but they're only shared between different 'calls' to the same occurrence of the sugar in our code.
@@ -425,7 +431,7 @@ either by actively zero-ing them at the start of the sugar, or by zero-ing them 
 
 You don't have to do that though if you don't actually care about the exact value of your variable (e.g `GOTO L`). 
 
-### The Algorithm
+### The Compiler's Algorithm
 #### Sugar Parsing
 Firstly, the compiler parses the different sugar sections and generates regex patterns 
 that would detect potential usages for each sugar.
@@ -459,4 +465,9 @@ To run the interpreter on a given binary file, run the following command:
 ```
 python interpreter.py <x1-input> <x2-input> ... <xn-input> -b <binary-file-path>
 ```
-The interpreter will print out the result of the binary on the given input.
+The interpreter will print out the result of the binary on the given input (variable `Y`).
+
+You could also pass an additional flag to print extra info about the run performed like so:
+```
+python interpreter.py <x1-input> <x2-input> ... <xn-input> -b <binary-file-path> --run_info
+```
