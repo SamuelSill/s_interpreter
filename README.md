@@ -23,6 +23,9 @@
       - [Sugar Types](#Sugar-Types)
       - [REPEAT Statement](#REPEAT-Statement)
       - [The REPEAT Tradeoff](#The-REPEAT-Tradeoff)
+      - [The Pitfalls of Sugars](#The-Pitfalls-of-Sugars)
+        - [Sugar Argument Edge Cases](#Sugar-Argument-Edge-Cases)
+        - [Sugar Internal Variables](#Sugar-Internal-Variables)
   - [The Algorithm](#The-Algorithm)
       - [Sugar Parsing](#Sugar-Parsing)
       - [Compiling the Code](#Compiling-the-Code)
@@ -240,15 +243,18 @@ We can define and use a syntactic sugar like so:
         Y <- Y + 1
         IF X != 0 GOTO A
 ```
+A few details to notice:
 * Notice that in the definition of the sugar, we specified the type of `L`.
 This sugar will only be used if we pass it with a valid label.
-* The compiler makes sure that in the compiled output, 
-  variable `Z` that was used inside the `GOTO` implementation DOES NOT collide with variable `Z` 
-  if it were used outside the sugar. We are safe to use any temporary variables (or labels) inside sugar implementations.
+* The compiler makes sure that after it expands the `GOTO` sugar,
+  variable `Z` that was used inside the `GOTO` implementation DOES NOT collide with variable `Z`
+  if it were used outside the sugar.
+  We are safe to use any temporary variables (or labels) inside sugar implementations.
   The exception to this rule is input/output variables though, as they CAN be manipulated from sugars.
 * A given sugar may only use other sugars that are defined before it in the file.
 * Sugar definitions are allowed to overlap in terms of their usage patterns. 
   The sugar that will eventually be used in the compiled output is the first in the file that matches the string.
+
 ##### Sugar Types
 When defining sugars, we need to specify the type of their arguments.
 
@@ -320,6 +326,105 @@ Any more keyword that we add will remove us of the challenge of writing in `S`, 
 
 You can still do meta-programming in `S` if you want though. Just not with consts 
 (as `S` does not natively support them).
+##### The Pitfalls of Sugars
+###### Sugar Argument Edge Cases
+Suppose you've implemented the sugar `{Variable V} += {Const K}` and `{Variable V1} -= {Variable V2}` correctly, 
+and you wish to use them to implement the sugar `{Variable OUT} <- {Const K} - {Variable V}`.
+
+Well, the straightforward approach is to implement it like so:
+```
+> {Variable OUT} <- {Const K} - {Variable V}
+        {OUT} <- {K}
+        {OUT} -= {V}
+```
+But there's an edge case here that needs to be addressed. Can you see it?
+
+What if we expand the line `Z <- 100 - Z`?
+It would expand to:
+```
+Z <- 100
+Z -= Z
+```
+No matter the initial value of `Z`, the given lines will make it `0`!
+
+So let's fix the case for when `V` is the same variable as `OUT`:
+
+```
+> {Variable OUT} <- {Const K} - {Variable V}
+        Z <- {V}
+        {OUT} <- {K}
+        {OUT} -= Z
+```
+Now you may argue that copying the value of `V` to `Z` 
+in the common case where `OUT` is not the same variable as `V` is inefficient.
+
+That would be quite silly of you, 
+as it's funny to argue about efficiency in this language to begin with, but you'd still be right.
+
+Well we can add an exception to this case! We can overload the sugar like so:
+```
+> {Variable OUT} <- {Const K} - {Variable OUT}
+        Z <- {OUT}
+        {OUT} <- {K}
+        {OUT} -= Z
+
+> {Variable OUT} <- {Const K} - {Variable V}
+        {OUT} <- {K}
+        {OUT} -= {V}
+```
+The order here **MATTERS**!
+As explained previously, the sugar chosen to expand a given line will be the **first in the file** that matches it.
+If declared the other way around, the more general-case sugar will take place always, 
+and we'll be left with the same bug we started with.
+###### Sugar Internal Variables
+Suppose you wished to initialize a given variable `Z` to `5` in the `MAIN` section.
+
+You could simply write it as `Z <- Z + 1` `5` times. After all, `Z` is initialized with `0`.
+
+That would work just fine, but what about sugars?
+You might think that it's safe to do the same with sugars, as the compiler gurantees
+that the sugar's internal variables are not used anywhere else in the program.
+
+Well, while you may be right that the compiler takes care of us 
+with regard to the uniqueness of the variables used in the sugar, a problem still may occur 
+if the sugar is used inside a loop.
+
+Let's see an example.
+
+Suppose you've implemented `{Variable V1} <- {Variable V2}` correctly. 
+Let's look at the following code:
+```
+> {Variable OUT} <- 1
+      Z <- Z + 1
+      {OUT} <- Z
+
+> MAIN
+  [A] Y <- 1
+      X <- X - 1
+      IF X != 0 GOTO A
+```
+You would assume for input `X = 2` the value of `Y` would be `1`.
+But it would actually be `2`, as the lines that `Y <- 1` expands, work with the same variable, 
+whatever the compiler may choose it to be.
+
+Of course this issue would not be present if we were to write our `MAIN` section like so:
+```
+> MAIN
+    Y <- 1
+    Y <- 1
+```
+This code will in fact always return 1, as the two lines expand to different lines, 
+hence with different variables.
+
+Sugar local variables may seem to behave like static variables initialized to `0` at first, 
+but they're only shared between different 'calls' to the same occurrence of the sugar in our code.
+
+As a result of this, a guideline for writing your sugars should be to 
+make sure the internal variables you use are initialized to `0`, 
+either by actively zero-ing them at the start of the sugar, or by zero-ing them before exiting the sugar.
+
+You don't have to do that though if you don't actually care about the exact value of your variable (e.g `GOTO L`). 
+
 ### The Algorithm
 #### Sugar Parsing
 Firstly, the compiler parses the different sugar sections and generates regex patterns 
