@@ -136,6 +136,7 @@ class VariableCommandType(_enum.IntEnum):
             return VariableCommandType.NoOp
 
     def encode(self) -> int:
+        # noinspection PyTypeChecker
         return int(self.value)
 
     def __str__(self) -> str:
@@ -285,6 +286,9 @@ class Instruction:
         return (f"[{str(self.label)}] " if self.label is not None else "") + str(self.sentence)
 
 
+_program_recursion_depth: int = 0
+
+
 @_dataclass(frozen=True)
 class Program:
     from typing import Optional as _Optional
@@ -293,7 +297,8 @@ class Program:
 
     @staticmethod
     def compile(*program: str,
-                sugars: _Optional[list["SyntacticSugar"]] = None) -> "Program":
+                sugars: _Optional[list["SyntacticSugar"]] = None,
+                verbose: bool = False) -> "Program":
         import re
 
         if sugars is None:
@@ -320,49 +325,60 @@ class Program:
                 if type(instruction.sentence.command) is JumpCommand:
                     used_labels.add(instruction.sentence.command.label)
 
-        for line in program:
-            try:
-                instructions.append(Instruction.compile(line))
-                update_used_labels_and_variables_by_instruction(instructions[-1])
-            except CompilationFailure as compilation_failure:
-                any_sugar_valid: bool = False
-                for sugar in sugars:
-                    if sugar.validate(line):
-                        for parameter in sugar.parameters(line):
-                            if type(parameter) is Label:
-                                used_labels.add(parameter)
-                            elif type(parameter) is Variable:
-                                used_variables.add(parameter)
-                        if label_match := re.fullmatch(r"\s*\[\s*(?P<sugar_label>[A-E]([1-9][0-9]*)?)\s*].*", line):
-                            used_labels.add(new_label := Label.compile(label_match.group("sugar_label")))
-                            instructions.append(Instruction(new_label,
-                                                            Sentence(VariableCommand(Variable("Y"),
-                                                                                     VariableCommandType.NoOp))))
-                        any_sugar_valid = True
-                        sugar_jobs.append(SugarJob(sugar, line, len(instructions)))
-                        break
-                if not any_sugar_valid:
-                    raise compilation_failure
+        global _program_recursion_depth
+        _program_recursion_depth += 1
 
-        for sugar_job_index, sugar_job in enumerate(sugar_jobs):
-            instructions_to_inject: list[Instruction] = sugar_job.sugar.compile(sugar_job.sugar_invocation,
-                                                                                used_labels,
-                                                                                used_variables)
-            update_used_labels_and_variables_by_instruction(*instructions_to_inject)
-            for instruction_index, instruction_to_inject in enumerate(instructions_to_inject):
-                instructions.insert(sugar_job.index_to_inject + instruction_index,
-                                    instruction_to_inject)
-            sugar_job_index += 1
-            while sugar_job_index < len(sugar_jobs):
-                sugar_jobs[sugar_job_index].index_to_inject += len(instructions_to_inject)
+        try:
+            for line in program:
+                try:
+                    instructions.append(Instruction.compile(line))
+                    update_used_labels_and_variables_by_instruction(instructions[-1])
+                except CompilationFailure as compilation_failure:
+                    any_sugar_valid: bool = False
+                    for sugar in sugars:
+                        if sugar.validate(line):
+                            for parameter in sugar.parameters(line):
+                                if type(parameter) is Label:
+                                    used_labels.add(parameter)
+                                elif type(parameter) is Variable:
+                                    used_variables.add(parameter)
+                            if label_match := re.fullmatch(r"\s*\[\s*(?P<sugar_label>[A-E]([1-9][0-9]*)?)\s*].*", line):
+                                used_labels.add(new_label := Label.compile(label_match.group("sugar_label")))
+                                instructions.append(Instruction(new_label,
+                                                                Sentence(VariableCommand(Variable("Y"),
+                                                                                         VariableCommandType.NoOp))))
+                            any_sugar_valid = True
+                            sugar_jobs.append(SugarJob(sugar, line, len(instructions)))
+                            break
+                    if not any_sugar_valid:
+                        raise compilation_failure
+
+            for sugar_job_index, sugar_job in enumerate(sugar_jobs):
+                if verbose:
+                    print("| " * (_program_recursion_depth - 1) + f"Compiling '{sugar_job.sugar_invocation}' "
+                                                                  f"('{sugar_job.sugar.title}')")
+                instructions_to_inject: list[Instruction] = sugar_job.sugar.compile(sugar_job.sugar_invocation,
+                                                                                    used_labels,
+                                                                                    used_variables,
+                                                                                    verbose)
+                update_used_labels_and_variables_by_instruction(*instructions_to_inject)
+                for instruction_index, instruction_to_inject in enumerate(instructions_to_inject):
+                    instructions.insert(sugar_job.index_to_inject + instruction_index,
+                                        instruction_to_inject)
                 sugar_job_index += 1
+                while sugar_job_index < len(sugar_jobs):
+                    sugar_jobs[sugar_job_index].index_to_inject += len(instructions_to_inject)
+                    sugar_job_index += 1
 
-        if (len(instructions) > 0 and
-                instructions[-1].label is None and
-                type(instructions[-1].sentence.command) is VariableCommand and
-                instructions[-1].sentence.command.variable.name == "Y" and
-                instructions[-1].sentence.command.command_type == VariableCommandType.NoOp):
-            raise CompilationFailure("Convention of Y<-Y is not respected!")
+            if (len(instructions) > 0 and
+                    instructions[-1].label is None and
+                    type(instructions[-1].sentence.command) is VariableCommand and
+                    instructions[-1].sentence.command.variable.name == "Y" and
+                    instructions[-1].sentence.command.command_type == VariableCommandType.NoOp):
+                raise CompilationFailure("Convention of Y<-Y is not respected!")
+        finally:
+            _program_recursion_depth -= 1
+
         return Program(instructions)
 
     def encode_repr(self) -> list[tuple[int, tuple[int, int]]]:
@@ -544,7 +560,8 @@ class SyntacticSugar:
     def compile(self,
                 invocation: str,
                 other_labels: _Optional[set[Label]] = None,
-                other_variables: _Optional[set[Variable]] = None) -> list[Instruction]:
+                other_variables: _Optional[set[Variable]] = None,
+                verbose: bool = False) -> list[Instruction]:
         import re
         from typing import Union
 
@@ -607,7 +624,8 @@ class SyntacticSugar:
                     line_index += 1
 
             sugar_program: Program = Program.compile(*sugar_program_instructions,
-                                                     sugars=self.__sugars)
+                                                     sugars=self.__sugars,
+                                                     verbose=verbose)
 
             for instruction in sugar_program.instructions:
                 if (
@@ -666,16 +684,22 @@ def main() -> None:
     argument_parser.add_argument("filename",
                                  type=str,
                                  help="File to compile")
-    argument_parser.add_argument("-o",
+    compiler_target = argument_parser.add_mutually_exclusive_group(required=True)
+    compiler_target.add_argument("-o",
                                  "--output",
                                  type=str,
                                  help="Output binary file",
                                  default=None)
-    argument_parser.add_argument("--encode",
+    compiler_target.add_argument("-e",
+                                 "--encode",
                                  action="store_true",
-                                 help="If existent, print out the encoding of the program.\n"
+                                 help="If present, print out the encoding of the program.\n"
                                       "NOTE: DO NOT use this flag for large binaries as it can "
-                                      "result in VERY SLOW calculations")
+                                      "result in IMPOSSIBLY SLOW calculations")
+    argument_parser.add_argument("-v",
+                                 "--verbose",
+                                 action="store_true",
+                                 help="If present, print additional verbose compilation info")
     arguments: Namespace = argument_parser.parse_args()
 
     with open(arguments.filename, "r") as file_to_compile:
@@ -709,18 +733,22 @@ def main() -> None:
         else:
             raise CompilationFailure(f"Failed to compile line {line_index}: '{line}'")
 
-    compiled_program: Program = Program.compile(*current_section_lines, sugars=sugars)
-    program: str = str(compiled_program)
+    if not is_main:
+        raise CompilationFailure("Nonexistent 'MAIN' section!")
+
+    compiled_program: Program = Program.compile(*current_section_lines,
+                                                sugars=sugars,
+                                                verbose=arguments.verbose)
+    print("\n"
+          "Finished compiling program")
 
     if arguments.output:
+        program: str = str(compiled_program)
         with open(arguments.output, "w") as output_file:
             output_file.write(program)
 
-        print(f"Compiled program to binary '{arguments.output}'.")
-
-    print(f"The program consists of {len(compiled_program.instructions)} instructions.")
-
-    if arguments.encode:
+        print(f"Saved to binary: \"{arguments.output}\"")
+    elif arguments.encode:
         print(f"It encodes to the value of {compiled_program.encode()}.")
 
 

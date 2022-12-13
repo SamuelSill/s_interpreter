@@ -26,7 +26,7 @@
       - [The Pitfalls of Sugars](#The-Pitfalls-of-Sugars)
         - [Sugar Argument Edge Cases](#Sugar-Argument-Edge-Cases)
         - [Sugar Internal Variables](#Sugar-Internal-Variables)
-  - [The Compiler's Algorithm](#The-Compiler's-Algorithm)
+  - [The Algorithm](#The-Algorithm)
       - [Sugar Parsing](#Sugar-Parsing)
       - [Compiling the Code](#Compiling-the-Code)
       - [Sugar Expansion](#Sugar-Expansion)
@@ -58,7 +58,7 @@ The label names could only be of the following:
 Given any variable `V` and label `L`:
 - `V <- V` - A blank instruction (do nothing)
 - `V <- V + 1` - Increment `V` by 1
-- `V <- V - 1` - If `V` is `0`, do nothing. Otherwise decrement `V` by 1
+- `V <- V - 1` - If `V` is `0` do nothing, Otherwise decrement `V` by 1
 - `IF V != 0 GOTO L` - If `V` isn't `0`, jump to the first occurrence of label `L` (if nonexistent the program exits), 
   otherwise continue from the next instruction.
 #### The Program
@@ -78,7 +78,7 @@ and may exit by two ways:
 - If it reaches the end of the program
 - If it performs a jump to a nonexistent _label_.
 #### Example
-Lets write a program that always returns the value of its first input (`X1`).
+Let's write a program that always returns the value of its first input (`X1`).
 
 Our first approach would be to write something like this:
 ```
@@ -195,15 +195,20 @@ In short, it allows us to easily compile `slang` files to binaries that the `S I
 
 ### Compiler Usage
 To compile a given `slang` file to a binary file, run the following command:
-```
+```commandline
 python compiler.py <slang-file-path> -o <binary-file-path>
 ```
-You could also pass an additional flag to print the encoding of the program like so:
-```
-python compiler.py <slang-file-path> -o <binary-file-path> --encode
+You could also pass a flag to print the encoding of the program instead, like so:
+```commandline
+python compiler.py <slang-file-path> --encode
 ```
 But be careful, as program encodings can grow incredibly large even with very few instructions, 
 so the compiler could throw an error instead.
+
+You can also pass the `verbose` flag for additional prints regarding the compilation process like so:
+```commandline
+python compiler.py <slang-file-path> -o <binary-file-path> --verbose
+```
 ### Slang Files
 In order to compile `S Language` code, 
 we write it in `.slang` files as a convention.
@@ -215,12 +220,12 @@ and between separate words/variables in the same instruction.
 `.slang` files are structured into sections, as follows:
 #### MAIN
 The `MAIN` section will contain the actual program you wish to compile.
-
-* Note that the `MAIN` section must appear at the end of the file.
+Please note that it must appear at the end of the file.
 
 Take the following example:
 
 ```
+# This program always returns 'Y = X1' 
 > MAIN
         IF X != 0 GOTO A
         Z <- Z + 1
@@ -229,7 +234,6 @@ Take the following example:
         Y <- Y + 1
         IF X != 0 GOTO A
 ```
-* This program returns the value of `X1` for any input.
 * Again, note that the indentation is only for ease of reading, and the compiler completely ignores it.
 #### Sugar Sections
 The previous example uses the pattern of the `GOTO L` syntactic sugar.
@@ -324,7 +328,7 @@ Given a const `K`, we can write a `Python` function that generates different ins
 After all, sugars are a convention and therefore if we all agree that a given sugar is compiled by the output
 of a `Python` function, there should be no problem!
 
-But if we do that, we might aswell write our code in `Python` or some other high level language instead of `S`.
+But if we do that, we might as well write our code in `Python` or some other high level language instead of `S`.
 
 So that is why consts only support the `REPEAT` keyword.
 Any additional keyword that we add will remove us of the challenge of writing in `S`, and defeat the purpose altogether.
@@ -385,10 +389,10 @@ and we'll be left with the same bug we started with.
 Suppose you wished to initialize a given variable `Z` to `5` in the `MAIN` section.
 
 You could simply write it as `Z <- Z + 1` `5` times. After all, `Z` is initialized to `0`, 
-so we don't need to set it to `0` before-hand.
+so we don't need to set it to `0` beforehand.
 
 But what about sugars?
-You might think that it's safe to do the same with sugars, as the compiler gurantees
+You might think that it's safe to do the same with sugars, as the compiler guarantees
 that the sugar's internal variables are not used anywhere else in the program.
 
 Well, while you may be right that the compiler takes care of us 
@@ -431,7 +435,7 @@ either by actively zero-ing them at the start of the sugar, or by zero-ing them 
 
 You don't have to do that though if you don't actually care about the exact value of your variable (e.g `GOTO L`). 
 
-### The Compiler's Algorithm
+### The Algorithm
 #### Sugar Parsing
 Firstly, the compiler parses the different sugar sections and generates regex patterns 
 that would detect potential usages for each sugar.
