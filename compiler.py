@@ -395,10 +395,11 @@ class Program:
         from sympy.ntheory import factorint, primerange
 
         factorization: dict[int, int] = factorint(encoded_program + 1)
+        prime_list: list[int] = primerange(max(factorization) + 1)
         return Program(
             [
                 Instruction.decode(factorization.get(p, 0))
-                for p in primerange(max(factorization) + 1)
+                for p in prime_list
             ]
         )
 
@@ -676,33 +677,11 @@ class SyntacticSugar:
         raise CompilationFailure(f"Failed to determine sugar parameters of: '{invocation}'")
 
 
-def main() -> None:
-    from argparse import ArgumentParser, Namespace
+def compile_slang(slang_file_path: str,
+                  verbose: bool = False) -> Program:
     import re
 
-    argument_parser: ArgumentParser = ArgumentParser(description="S Compiler")
-    argument_parser.add_argument("filename",
-                                 type=str,
-                                 help="File to compile")
-    compiler_target = argument_parser.add_mutually_exclusive_group(required=True)
-    compiler_target.add_argument("-o",
-                                 "--output",
-                                 type=str,
-                                 help="Output binary file",
-                                 default=None)
-    compiler_target.add_argument("-e",
-                                 "--encode",
-                                 action="store_true",
-                                 help="If present, print out the encoding of the program.\n"
-                                      "NOTE: DO NOT use this flag for large binaries as it can "
-                                      "result in IMPOSSIBLY SLOW calculations")
-    argument_parser.add_argument("-v",
-                                 "--verbose",
-                                 action="store_true",
-                                 help="If present, print additional verbose compilation info")
-    arguments: Namespace = argument_parser.parse_args()
-
-    with open(arguments.filename, "r") as file_to_compile:
+    with open(slang_file_path, "r") as file_to_compile:
         file_to_compile_content: list[str] = file_to_compile.readlines()
 
     current_section_lines: list[str] = []
@@ -724,30 +703,84 @@ def main() -> None:
                 sugars.append(SyntacticSugar(current_section_title,
                                              *current_section_lines,
                                              sugars=sugars.copy()))
-            is_main = bool(re.fullmatch(r"MAIN",
-                                        current_section_title := title_match.group("title").split("#")[0],
+            is_main = bool(re.fullmatch(r"\s*MAIN\s*",
+                                        current_section_title := title_match.group("title").split("#")[0].strip(),
                                         re.IGNORECASE))
             current_section_lines = []
         elif line_match := re.fullmatch(r"\s*(?P<line>.*)\s*", line):
-            current_section_lines.append(line_match.group("line").split("#")[0])
+            current_section_lines.append(line_match.group("line").split("#")[0].strip())
         else:
             raise CompilationFailure(f"Failed to compile line {line_index}: '{line}'")
 
     if not is_main:
         raise CompilationFailure("Nonexistent 'MAIN' section!")
 
-    compiled_program: Program = Program.compile(*current_section_lines,
-                                                sugars=sugars,
-                                                verbose=arguments.verbose)
-    print("\n"
-          "Finished compiling program")
+    return Program.compile(*current_section_lines,
+                           sugars=sugars,
+                           verbose=verbose)
 
-    if arguments.output:
+
+def main() -> None:
+    from argparse import ArgumentParser, Namespace
+    from time import time
+
+    argument_parser: ArgumentParser = ArgumentParser(description="S Compiler")
+    input_source_group = argument_parser.add_mutually_exclusive_group(required=True)
+    input_source_group.add_argument("-f",
+                                    "--file",
+                                    type=str,
+                                    default=None,
+                                    help="File to compile")
+    input_source_group.add_argument("-d",
+                                    "--decode",
+                                    type=int,
+                                    default=None,
+                                    help="The program encoding")
+    compiler_output = argument_parser.add_mutually_exclusive_group(required=True)
+    compiler_output.add_argument("-o",
+                                 "--output",
+                                 type=str,
+                                 help="Output binary file",
+                                 default=None)
+    compiler_output.add_argument("-e",
+                                 "--encode",
+                                 action="store_true",
+                                 help="If present, print out the encoding of the program.\n"
+                                      "NOTE: DO NOT use this flag for large binaries as it can "
+                                      "result in IMPOSSIBLY SLOW calculations")
+    compiler_output.add_argument("-p",
+                                 "--print",
+                                 action="store_true",
+                                 help="If present, simply print out the compiled output")
+    argument_parser.add_argument("-v",
+                                 "--verbose",
+                                 action="store_true",
+                                 help="If present, print additional verbose compilation info")
+    arguments: Namespace = argument_parser.parse_args()
+
+    start_time: float = time()
+    compiled_program: Program = (
+        compile_slang(arguments.filename, arguments.verbose)
+        if arguments.decode is None
+        else Program.decode(arguments.decode)
+    )
+    time_taken_to_compile: float = time() - start_time
+
+    if arguments.verbose and arguments.filename is not None:
+        print()
+    print(f"Finished compiling program (took {time_taken_to_compile:0.2f} seconds).")
+
+    if arguments.output or arguments.print:
         program: str = str(compiled_program)
-        with open(arguments.output, "w") as output_file:
-            output_file.write(program)
+        if arguments.output:
+            with open(arguments.output, "w") as output_file:
+                output_file.write(program)
 
-        print(f"Saved to binary: \"{arguments.output}\"")
+            print(f"Saved to binary: \"{arguments.output}\"")
+        else:
+            print(f"\n"
+                  f"The Program:\n"
+                  f"{program}")
     elif arguments.encode:
         print(f"It encodes to the value of {compiled_program.encode()}.")
 
@@ -769,5 +802,6 @@ __all__ = (
     "Instruction",
     "Program",
     "SyntacticSugar",
+    "compile_slang",
     "main"
 )

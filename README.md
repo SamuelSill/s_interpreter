@@ -196,18 +196,26 @@ In short, it allows us to easily compile `slang` files to binaries that the `S I
 ### Compiler Usage
 To compile a given `slang` file to a binary file, run the following command:
 ```commandline
-python compiler.py <slang-file-path> -o <binary-file-path>
+python compiler.py -f <slang-file-path> -o <binary-file-path>
 ```
 You could also pass a flag to print the encoding of the program instead, like so:
 ```commandline
-python compiler.py <slang-file-path> --encode
+python compiler.py -f <slang-file-path> --encode
 ```
 But be careful, as program encodings can grow incredibly large even with very few instructions, 
 so the compiler could throw an error instead.
 
+You could pass the flag `print` to print the program to stdout like so:
+```commandline
+python compiler.py -f <slang-file-path> --print
+```
 You can also pass the `verbose` flag for additional prints regarding the compilation process like so:
 ```commandline
-python compiler.py <slang-file-path> -o <binary-file-path> --verbose
+python compiler.py -f <slang-file-path> -o <binary-file-path> --verbose
+```
+You can also provide the input program by passing its encoding instead of a `slang` file like so:
+```commandline
+python compiler.py -d <program-encoding> -o <binary-file-path>
 ```
 ### Slang Files
 In order to compile `S Language` code, 
@@ -466,12 +474,12 @@ the interpreter's purpose is only to run those compiled binaries.
 
 ### Interpreter Usage
 To run the interpreter on a given binary file, run the following command:
-```
+```commandline
 python interpreter.py <x1-input> <x2-input> ... <xn-input> -b <binary-file-path>
 ```
 The interpreter will print out the result of the binary on the given input (variable `Y`).
 
 You could also pass an additional flag to print extra info about the run performed like so:
-```
+```commandline
 python interpreter.py <x1-input> <x2-input> ... <xn-input> -b <binary-file-path> --run_info
 ```
