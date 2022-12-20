@@ -92,7 +92,6 @@ class Interpreter:
 
 def main() -> None:
     from argparse import ArgumentParser, Namespace
-    from json import dumps
 
     argument_parser: ArgumentParser = ArgumentParser(description="S Compiler")
     argument_parser.add_argument("x",

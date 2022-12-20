@@ -1,0 +1,25 @@
+[build-system]
+build-backend = "setuptools.build_meta"
+requires = [
+    "setuptools>=61.0",
+    "sympy>=1.11.1"
+]
+
+[project]
+name = "s_interpreter"
+version = "0.0.1"
+authors = [
+  { name="Muli Silman", email="mulisilman@gmail.com" },
+]
+description = "A package for compiling and interpreting S Language code"
+readme = "README.md"
+requires-python = ">=3.11"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/SamuelSill/s_interpreter"
+"Bug Tracker" = "https://github.com/SamuelSill/s_interpreter/issues"
