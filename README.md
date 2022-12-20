@@ -466,7 +466,7 @@ expands each sugar in-place (using the previously compiled instructions to avoid
 The sugar expansion algorithm is probably where most of the brains of the compiler lies.
 
 It's a bit too intricate to be discussed here, 
-so it is recommended you read the algorithm in file [compiler.py](compiler.py), under the `SyntacticSugar.compile` function.
+so it is recommended you read the algorithm in file [compiler.py](src/compiler.py), under the `SyntacticSugar.compile` function.
 
 ## The S Interpreter
 While the `S Compiler` does all the work of compiling `.slang` files to binaries,
