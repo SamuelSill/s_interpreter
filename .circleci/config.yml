@@ -1,26 +1,47 @@
 version: 2.1
+orbs:
+  python: circleci/python@2.1.1
+
 jobs:
-  upload-to-pip:
-    docker:
-      - image: cimg/python:3.11.1
+  build:
+    executor: python/default
     steps:
       - checkout
+      - python/install-packages:
+          pkg-manager: pip
+      - python/dist
+      - persist_to_workspace:
+          root: ~/project
+          paths:
+            - .
+  test:
+    executor: python/default
+    steps:
+      - checkout
+      - python/install-packages:
+          pkg-manager: pip
       - run:
-          name: "Installing Twine"
-          command: pip install -U twine
-      - run:
-          name: "Installing Build"
-          command: pip install build
-      - run:
-          name: "Building Distribution"
-          command: python -m build
-      - run:
-          name: "Uploading to Pip"
-          command: |
-            twine upload --repository testpypi dist/*
-            twine upload dist/*
+          name: Testing S Compiler/Interpreter
+          command: echo Here Be Pytest
+
+  deploy:
+    executor: python/default
+    steps:
+      - checkout
+      - python/install-packages:
+          pkg-manager: pip
+      - run: pip install twine && twine upload dist/*
 
 workflows:
-  build-workflow:
+  test_my_app:
     jobs:
-      - upload-to-pip
+      - build
+      - test:
+          requires:
+            - build
+      - deploy:
+          requires:
+            - test
+          filters:
+            branches:
+              only: master
