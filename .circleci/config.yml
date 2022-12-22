@@ -9,7 +9,9 @@ jobs:
       - checkout
       - python/install-packages:
           pkg-manager: pip
-      - python/dist
+      - run:
+          name: Building Distribution
+          command: python -m build
       - persist_to_workspace:
           root: ~/project
           paths:
