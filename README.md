@@ -1,20 +1,7 @@
 # S Compiler & Interpreter
-
 ## Table of Contents
-- [The S Language](#The-S-Language)
-  - [The Model](#The-Model)
-    - [Variables](#Variables)
-    - [Labels](#Labels)
-    - [Instructions](#Instructions)
-    - [The Program](#The-Program)
-    - [Example](#Example)
-    - [Syntactic Sugars](#Syntactic-Sugars)
-  - [Encoding](#Encoding)
-    - [PairWise](#PairWise)
-    - [ListWise](#ListWise)
-    - [Instruction Encoding](#Instruction-Encoding)
-    - [Program Encoding](#Program-Encoding)
-  - [Conventions](#Conventions)
+- [Installation](#Installation)
+- [A Simple Example](#A-Simple-Example)
 - [The S Compiler](#The-S-Compiler)
   - [Compiler Usage](#Compiler-Usage)
   - [Slang Files](#Slang-Files)
@@ -32,160 +19,70 @@
       - [Sugar Expansion](#Sugar-Expansion)
 - [The S Interpreter](#The-S-Interpreter)
   - [Interpreter Usage](#Interpreter-Usage)
-## The S Language
-
----
-`The S Language` is a [model of computation](https://en.wikipedia.org/wiki/Model_of_computation) 
-that is taught in course _Theory of Computation_ at _The Academic College of Tel Aviv, Israel_.
-### The Model
-#### Variables
-The main thing to note about the `S Language`, is that it only supports non-negative integers.
-
-The language supports three different variable types:
-- **Input Variables**: `X1`/`X`, `X2`, `X3`...
-- **Temporary/Work Variables**: `Z1`/`Z`, `Z2`, `Z3`...
-- **One Output Variable**: `Y1`/`Y`
-#### Labels
-You can mark instructions in the `S Language` with labels.
-
-The label names could only be of the following:
-
-`A1`/`A`, `B1`/`B`, `C1`/`C`, `D1`/`D`, `E1`/`E`,
-`A2`, `B2`, ..., `E2`, `A3`, `B3`, ...
-#### Instructions
-`The S Language` only supports 4 different instructions:
-
-Given any variable `V` and label `L`:
-- `V <- V` - A blank instruction (do nothing)
-- `V <- V + 1` - Increment `V` by 1
-- `V <- V - 1` - If `V` is `0` do nothing, Otherwise decrement `V` by 1
-- `IF V != 0 GOTO L` - If `V` isn't `0`, jump to the first occurrence of label `L` (if nonexistent the program exits), 
-  otherwise continue from the next instruction.
-#### The Program
-A program written in the `S Language` is composed of a series of instructions, with or without labels.
-
-At the start of the program, all variables are initialized to `0`.
-
-Only the input variables (`X1`, `X2`, ...) are initialized with the user input. 
-All input variables that weren't given before running the program are also initialized to `0`.
-
-A given program may behave in one of two ways:
-- Run infinitely, in which case it returns nothing
-- Finish running, in which case ONLY the value of variable `Y` is returned
-
-The program runs the instructions sequentially one after the other (unless a jump is performed), 
-and may exit by two ways:
-- If it reaches the end of the program
-- If it performs a jump to a nonexistent _label_.
-#### Example
-Let's write a program that always returns the value of its first input (`X1`).
-
-Our first approach would be to write something like this:
+- [The S Language](#The-S-Language)
+  - [The Model](#The-Model)
+    - [Variables](#Variables)
+    - [Labels](#Labels)
+    - [Instructions](#Instructions)
+    - [The Program](#The-Program)
+    - [Example](#Example)
+    - [Syntactic Sugars](#Syntactic-Sugars)
+  - [Encoding](#Encoding)
+    - [PairWise](#PairWise)
+    - [ListWise](#ListWise)
+    - [Instruction Encoding](#Instruction-Encoding)
+    - [Program Encoding](#Program-Encoding)
+  - [Conventions](#Conventions)
+## Installation
+Install (and update) using `pip`:
+```shell
+pip install s_interpreter
 ```
-[A] X <- X - 1
-    Y <- Y + 1
-    IF X != 0 GOTO A
+or you can clone the repository using `git`:
+```shell
+git clone https://github.com/SamuelSill/s_interpreter.git
 ```
-This program does the trick for all inputs except for `X = 0`.
-
-Let's fix the edge case:
+## A Simple Example
+The following is a program in `S` that always returns the value of `X1`:
 ```
-    IF X != 0 GOTO A
-    Z <- Z + 1
-    IF Z != 0 GOTO E
-[A] X <- X - 1
-    Y <- Y + 1
-    IF X != 0 GOTO A
+# Sugar for performing a non-conditional jump
+> GOTO {Label L}
+        Z <- Z + 1
+        IF Z != 0 GOTO {L}
+
+# Sugar for incrementing variable V1 by the value of V2
+> {Variable V1} += {Variable V2}
+        IF {V2} != 0 GOTO A
+        GOTO E
+    [A] {V2} <- {V2} - 1
+        Z <- Z + 1
+        IF {V2} != 0 GOTO A
+    [B] Z <- Z - 1
+        {V2} <- {V2} + 1
+        {V1} <- {V1} + 1
+        IF Z != 0 GOTO B
+    [E] Y <- Y
+
+# The program starts here
+> MAIN
+        Y += X1
 ```
-Notice that in order to jump unconditionally to non-existent label `E` (and therefore exit), 
-we had to increment a temporary variable to make sure it's not `0`.
-#### Syntactic Sugars
-Due to the simplicity of the `S Language`, we might want to define conventions 
-for patterns that often appear in our code.
+Compiling/Running the program:
+```shell
+# Compile the program (in file main.slang) to binary file 'output.txt':
+python -m compiler -f main.slang -b output.txt
 
-Take for example the unconditional jump pattern to some label `L`:
+# Now 'output.txt' contains *pure* S language code, no sugars.
+# Run the interpreter on the binary file on input '10 20 15'
+python -m interpreter -b output.txt 42
 ```
-Z <- Z + 1
-IF Z != 0 GOTO L
+The console output:
 ```
-We can agree that whenever someone writes `GOTO L` in their program, it would mean that they wrote the above pattern.
-
-Of course the `Z` variable would have to be unique and unused anywhere in the program, and not hard-coded `Z`.
-We wouldn't want our sugars to change the rest of the program's functionality.
-
-This **DOES NOT MEAN that** `GOTO L` is now a supported instruction in the `S Language`. 
-It's just a convention between us programmers. 
-
-To compile a program that uses syntactic sugars, 
-we'd still need to expand them to their underlying instructions.
-
-The syntactic sugars will allow us to write higher level code while still respecting the language's restrictions.
-### Encoding
-Since our language only supports integers, 
-we might want to encode structured data into integers so that we can process it.
-#### PairWise
-If we wish to encode the pair _<a, b>_ where `a`, `b` are non-negative integers, we follow the formula:
-
-$$\left< a, b \right> = 2^a(2b + 1) - 1$$
-#### ListWise
-If we wish to encode the list _[e<sub>1</sub>, e<sub>2</sub>, ..., e<sub>n</sub>]_, 
-where all elements are non-negative integers, we follow the formula:
-
-$$[e_1, e_2, ..., e_n] = \sum_{i=1}^n p_i^{e_i}$$
-
-Where _p<sub>i</sub>_ is the prime at position _i_ (e.g p<sub>1</sub>=2, p<sub>3</sub>=5)
-
-* Notice that adding _0_ to the end of the list does not change its encoding.
-Therefore, if we wish to know the length of the list, we assume it won't end with _0_ elements.
-#### Instruction Encoding
-<ins>Encoding Variables</ins>: If we wish to encode a given variable, 
-we just look at its index in the following sequence:
-
-`Y`, `X1`, `Z1`, `X2`, `Z2`, `X3`, `Z3`, ...
-
-* For example, `#Y` = 1, `#Z2` = 5 etc.
-
-<ins>Encoding Labels</ins>: If we wish to encode a given label, we just look at its index in the following sequence:
-
-`A1`, `B1`, `C1`, `D1`, `E1`, `A2`, `B2`, ...
-
-* For example, `A1` = 1, `#C1` = 3 etc.
-
-<ins>Encoding Instructions:</ins> If we wish to encode a given instruction (with or without label), 
-it is encoded as _<a, <b, c>>_, where:
-
-- <ins>**_a_**</ins>:
-  - _0_ if the instruction has no label 
-  - Otherwise the encoding of the label
-- <ins>**_b_**</ins>: 
-  - _0_ if `V <- V`
-  - _1_ if `V <- V + 1`
-  - _2_ if `V <- V - 1`
-  - (_2_ + `#L`) if `IF V != 0 GOTO L` 
-- <ins>**_c_**</ins>: `#V` - _1_ where `V` is the variable in the instruction
-#### Program Encoding
-If we wish to encode the program:
+Output: 42
 ```
-I1
-I2
-.
-.
-.
-In
-```
+*You can learn more about the `slang` syntax [here](#Slang-Files).*
 
-We just follow the formula:
-
-\#[\#_I<sub>1</sub>_, \#_I<sub>2</sub>_, ..., \#_I<sub>n</sub>_] - _1_
-
-* Notice that the encoding for `Y <- Y` is 0.
-  This means that adding such instruction without a label to the end of a program **will not** change its encoding.
-  This is problematic, so as a convention, no program will end with `Y <- Y` without a label.
-### Conventions
-- If the index of a variable/label is 1, we can omit it.
-- No program will end with a non-labeled `Y <- Y` instruction.
-- Although it's not mandatory, label `E` (`E1`) is never used as a label of an instruction,
-  so that we can always jump to it if we wish to exit the program.
+*You can learn more about the basic syntax of the `S Language` [here](#The-S-Language).*
 ## The S Compiler
 
 --- 
@@ -195,27 +92,27 @@ In short, it allows us to easily compile `slang` files to binaries that the `S I
 
 ### Compiler Usage
 To compile a given `slang` file to a binary file, run the following command:
-```commandline
-python compiler.py -f <slang-file-path> -o <binary-file-path>
+```shell
+python -m compiler -f /slang/file/path -o /binary/file/path
 ```
 You could also pass a flag to print the encoding of the program instead, like so:
-```commandline
-python compiler.py -f <slang-file-path> --encode
+```shell
+python -m compiler -f /slang/file/path --encode
 ```
 But be careful, as program encodings can grow incredibly large even with very few instructions, 
 so the compiler could throw an error instead.
 
 You could pass the flag `print` to print the program to stdout like so:
-```commandline
-python compiler.py -f <slang-file-path> --print
+```shell
+python -m compiler -f /slang/file/path --print
 ```
 You can also pass the `verbose` flag for additional prints regarding the compilation process like so:
-```commandline
-python compiler.py -f <slang-file-path> -o <binary-file-path> --verbose
+```shell
+python -m compiler -f /slang/file/path -o /binary/file/path --verbose
 ```
-You can also provide the input program by passing its encoding instead of a `slang` file like so:
-```commandline
-python compiler.py -d <program-encoding> -o <binary-file-path>
+You can also provide the input program by passing its encoding (a number) instead of a `slang` file like so:
+```shell
+python -m compiler -d {program-encoding} -o /binary/file/path
 ```
 ### Slang Files
 In order to compile `S Language` code, 
@@ -474,12 +371,166 @@ the interpreter's purpose is only to run those compiled binaries.
 
 ### Interpreter Usage
 To run the interpreter on a given binary file, run the following command:
-```commandline
-python interpreter.py <x1-input> <x2-input> ... <xn-input> -b <binary-file-path>
+```shell
+python -m  interpreter <x1-input> <x2-input> ... <xn-input> -b /binary/file/path
 ```
 The interpreter will print out the result of the binary on the given input (variable `Y`).
 
 You could also pass an additional flag to print extra info about the run performed like so:
-```commandline
-python interpreter.py <x1-input> <x2-input> ... <xn-input> -b <binary-file-path> --run_info
+```shell
+python -m  interpreter <x1-input> <x2-input> ... <xn-input> -b /binary/file/path --run_info
 ```
+## The S Language
+
+---
+`The S Language` is a [model of computation](https://en.wikipedia.org/wiki/Model_of_computation) 
+that is taught in course _Theory of Computation_ at _The Academic College of Tel Aviv, Israel_.
+### The Model
+#### Variables
+The main thing to note about the `S Language`, is that it only supports non-negative integers.
+
+The language supports three different variable types:
+- **Input Variables**: `X1`/`X`, `X2`, `X3`...
+- **Temporary/Work Variables**: `Z1`/`Z`, `Z2`, `Z3`...
+- **One Output Variable**: `Y1`/`Y`
+#### Labels
+You can mark instructions in the `S Language` with labels.
+
+The label names could only be of the following:
+
+`A1`/`A`, `B1`/`B`, `C1`/`C`, `D1`/`D`, `E1`/`E`,
+`A2`, `B2`, ..., `E2`, `A3`, `B3`, ...
+#### Instructions
+`The S Language` only supports 4 different instructions:
+
+Given any variable `V` and label `L`:
+- `V <- V` - A blank instruction (do nothing)
+- `V <- V + 1` - Increment `V` by 1
+- `V <- V - 1` - If `V` is `0` do nothing, Otherwise decrement `V` by 1
+- `IF V != 0 GOTO L` - If `V` isn't `0`, jump to the first occurrence of label `L` (if nonexistent the program exits), 
+  otherwise continue from the next instruction.
+#### The Program
+A program written in the `S Language` is composed of a series of instructions, with or without labels.
+
+At the start of the program, all variables are initialized to `0`.
+
+Only the input variables (`X1`, `X2`, ...) are initialized with the user input. 
+All input variables that weren't given before running the program are also initialized to `0`.
+
+A given program may behave in one of two ways:
+- Run infinitely, in which case it returns nothing
+- Finish running, in which case ONLY the value of variable `Y` is returned
+
+The program runs the instructions sequentially one after the other (unless a jump is performed), 
+and may exit by two ways:
+- If it reaches the end of the program
+- If it performs a jump to a nonexistent _label_.
+#### Example
+Let's write a program that always returns the value of its first input (`X1`).
+
+Our first approach would be to write something like this:
+```
+[A] X <- X - 1
+    Y <- Y + 1
+    IF X != 0 GOTO A
+```
+This program does the trick for all inputs except for `X = 0`.
+
+Let's fix the edge case:
+```
+    IF X != 0 GOTO A
+    Z <- Z + 1
+    IF Z != 0 GOTO E
+[A] X <- X - 1
+    Y <- Y + 1
+    IF X != 0 GOTO A
+```
+Notice that in order to jump unconditionally to non-existent label `E` (and therefore exit), 
+we had to increment a temporary variable to make sure it's not `0`.
+#### Syntactic Sugars
+Due to the simplicity of the `S Language`, we might want to define conventions 
+for patterns that often appear in our code.
+
+Take for example the unconditional jump pattern to some label `L`:
+```
+Z <- Z + 1
+IF Z != 0 GOTO L
+```
+We can agree that whenever someone writes `GOTO L` in their program, it would mean that they wrote the above pattern.
+
+Of course the `Z` variable would have to be unique and unused anywhere in the program, and not hard-coded `Z`.
+We wouldn't want our sugars to change the rest of the program's functionality.
+
+This **DOES NOT MEAN that** `GOTO L` is now a supported instruction in the `S Language`. 
+It's just a convention between us programmers. 
+
+To compile a program that uses syntactic sugars, 
+we'd still need to expand them to their underlying instructions.
+
+The syntactic sugars will allow us to write higher level code while still respecting the language's restrictions.
+### Encoding
+Since our language only supports integers, 
+we might want to encode structured data into integers so that we can process it.
+#### PairWise
+If we wish to encode the pair _<a, b>_ where `a`, `b` are non-negative integers, we follow the formula:
+
+$$\left< a, b \right> = 2^a(2b + 1) - 1$$
+#### ListWise
+If we wish to encode the list _[e<sub>1</sub>, e<sub>2</sub>, ..., e<sub>n</sub>]_, 
+where all elements are non-negative integers, we follow the formula:
+
+$$[e_1, e_2, ..., e_n] = \sum_{i=1}^n p_i^{e_i}$$
+
+Where _p<sub>i</sub>_ is the prime at position _i_ (e.g p<sub>1</sub>=2, p<sub>3</sub>=5)
+
+* Notice that adding _0_ to the end of the list does not change its encoding.
+Therefore, if we wish to know the length of the list, we assume it won't end with _0_ elements.
+#### Instruction Encoding
+<ins>Encoding Variables</ins>: If we wish to encode a given variable, 
+we just look at its index in the following sequence:
+
+`Y`, `X1`, `Z1`, `X2`, `Z2`, `X3`, `Z3`, ...
+
+* For example, `#Y` = 1, `#Z2` = 5 etc.
+
+<ins>Encoding Labels</ins>: If we wish to encode a given label, we just look at its index in the following sequence:
+
+`A1`, `B1`, `C1`, `D1`, `E1`, `A2`, `B2`, ...
+
+* For example, `A1` = 1, `#C1` = 3 etc.
+
+<ins>Encoding Instructions:</ins> If we wish to encode a given instruction (with or without label), 
+it is encoded as _<a, <b, c>>_, where:
+
+- <ins>**_a_**</ins>:
+  - _0_ if the instruction has no label 
+  - Otherwise the encoding of the label
+- <ins>**_b_**</ins>: 
+  - _0_ if `V <- V`
+  - _1_ if `V <- V + 1`
+  - _2_ if `V <- V - 1`
+  - (_2_ + `#L`) if `IF V != 0 GOTO L` 
+- <ins>**_c_**</ins>: `#V` - _1_ where `V` is the variable in the instruction
+#### Program Encoding
+If we wish to encode the program:
+```
+I1
+I2
+.
+.
+.
+In
+```
+
+We just follow the formula:
+
+\#[\#_I<sub>1</sub>_, \#_I<sub>2</sub>_, ..., \#_I<sub>n</sub>_] - _1_
+
+* Notice that the encoding for `Y <- Y` is 0.
+  This means that adding such instruction without a label to the end of a program **will not** change its encoding.
+  This is problematic, so as a convention, no program will end with `Y <- Y` without a label.
+### Conventions
+- If the index of a variable/label is 1, we can omit it.
+- No program will end with a non-labeled `Y <- Y` instruction.
+- Although it's not mandatory, label `E` (`E1`) is never used as a label of an instruction,
+  so that we can always jump to it if we wish to exit the program.

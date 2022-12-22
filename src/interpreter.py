@@ -100,6 +100,7 @@ def main() -> None:
                                  help="The program's input")
     argument_parser.add_argument("-b",
                                  "--binary",
+                                 required=True,
                                  type=str,
                                  help="Binary file to run")
     argument_parser.add_argument("--run_info",
