@@ -2,13 +2,23 @@ version: 2.1
 jobs:
   upload-to-pip:
     docker:
-      - image: cimg/base:stable
+      - image: cimg/python:3.11.1
     steps:
       - checkout
       - run:
-          name: "Upload to Pip"
+          name: "Installing Twine"
+          command: pip install -U twine
+      - run:
+          name: "Installing Build"
+          command: pip install build
+      - run:
+          name: "Building Distribution"
+          command: python -m build
+      - run:
+          name: "Uploading to Pip"
           command: |
-            echo Hello, World!
+            twine upload --repository testpypi dist/*
+            twine upload dist/*
 
 workflows:
   build-workflow:
