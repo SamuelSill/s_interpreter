@@ -70,11 +70,11 @@ The following is a program in `S` that always returns the value of `X1`:
 Compiling/Running the program:
 ```shell
 # Compile the program (in file main.slang) to binary file 'output.txt':
-python -m compiler -f main.slang -b output.txt
+s_compiler -f main.slang -b output.txt
 
 # Now 'output.txt' contains *pure* S language code, no sugars.
 # Run the interpreter on the binary file on input '10 20 15'
-python -m interpreter -b output.txt 42
+s_interpreter -b output.txt 42
 ```
 The console output:
 ```
@@ -93,26 +93,26 @@ In short, it allows us to easily compile `slang` files to binaries that the `S I
 ### Compiler Usage
 To compile a given `slang` file to a binary file, run the following command:
 ```shell
-python -m compiler -f /slang/file/path -o /binary/file/path
+s_compiler -f /slang/file/path -o /binary/file/path
 ```
 You could also pass a flag to print the encoding of the program instead, like so:
 ```shell
-python -m compiler -f /slang/file/path --encode
+s_compiler -f /slang/file/path --encode
 ```
 But be careful, as program encodings can grow incredibly large even with very few instructions, 
 so the compiler could throw an error instead.
 
 You could pass the flag `print` to print the program to stdout like so:
 ```shell
-python -m compiler -f /slang/file/path --print
+s_compiler -f /slang/file/path --print
 ```
 You can also pass the `verbose` flag for additional prints regarding the compilation process like so:
 ```shell
-python -m compiler -f /slang/file/path -o /binary/file/path --verbose
+s_compiler -f /slang/file/path -o /binary/file/path --verbose
 ```
 You can also provide the input program by passing its encoding (a number) instead of a `slang` file like so:
 ```shell
-python -m compiler -d {program-encoding} -o /binary/file/path
+s_compiler -d {program-encoding} -o /binary/file/path
 ```
 ### Slang Files
 In order to compile `S Language` code, 
@@ -372,13 +372,13 @@ the interpreter's purpose is only to run those compiled binaries.
 ### Interpreter Usage
 To run the interpreter on a given binary file, run the following command:
 ```shell
-python -m  interpreter <x1-input> <x2-input> ... <xn-input> -b /binary/file/path
+s_interpreter <x1-input> <x2-input> ... <xn-input> -b /binary/file/path
 ```
 The interpreter will print out the result of the binary on the given input (variable `Y`).
 
 You could also pass an additional flag to print extra info about the run performed like so:
 ```shell
-python -m  interpreter <x1-input> <x2-input> ... <xn-input> -b /binary/file/path --run_info
+s_interpreter <x1-input> <x2-input> ... <xn-input> -b /binary/file/path --run_info
 ```
 ## The S Language
 

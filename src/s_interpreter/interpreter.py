@@ -1,4 +1,4 @@
-import compiler as _compiler
+from .compiler import Program as _Program
 
 
 class InterpreterError(RuntimeError):
@@ -9,26 +9,27 @@ class Interpreter:
     from typing import Optional as _Optional
 
     def __init__(self,
-                 program: _compiler.Program):
-        self.__program: _compiler.Program = program
+                 program: _Program):
+        from .compiler import Label, Variable, JumpCommand
+        self.__program: _Program = program
         self.__instruction_index: int = 0
         self.__instructions_performed: int = 0
-        self.__label_map: dict[_compiler.Label, int] = {}
+        self.__label_map: dict[Label, int] = {}
         for instruction_index, instruction in enumerate(self.__program.instructions):
             if instruction.label is not None and instruction.label not in self.__label_map:
                 self.__label_map[instruction.label] = instruction_index
 
-        self.__variables: dict[_compiler.Variable: int] = {_compiler.Variable("Y", 1): 0}
+        self.__variables: dict[Variable: int] = {Variable("Y", 1): 0}
         for instruction in self.__program.instructions:
             if (
-                type(instruction.sentence.command) is _compiler.JumpCommand and
+                type(instruction.sentence.command) is JumpCommand and
                 instruction.sentence.command.label not in self.__label_map
             ):
                 self.__label_map[instruction.sentence.command.label] = len(self.__program.instructions)
             self.__variables[instruction.sentence.command.variable] = 0
 
     @property
-    def program(self) -> _compiler.Program:
+    def program(self) -> _Program:
         return self.__program
 
     @property
@@ -40,10 +41,11 @@ class Interpreter:
         return self.__instructions_performed
 
     def step(self) -> _Optional[int]:
+        from .compiler import Instruction, JumpCommand, VariableCommandType, Variable
         if self.__instruction_index < len(self.__program.instructions):
-            current_instruction: _compiler.Instruction = self.__program.instructions[self.__instruction_index]
+            current_instruction: Instruction = self.__program.instructions[self.__instruction_index]
 
-            if type(current_instruction.sentence.command) is _compiler.JumpCommand:
+            if type(current_instruction.sentence.command) is JumpCommand:
                 self.__instruction_index = (
                     self.__label_map[current_instruction.sentence.command.label]
                     if self.__variables[current_instruction.sentence.command.variable] != 0
@@ -53,19 +55,20 @@ class Interpreter:
             else:
                 self.__instruction_index += 1
 
-                if current_instruction.sentence.command.command_type == _compiler.VariableCommandType.Increment:
+                if current_instruction.sentence.command.command_type == VariableCommandType.Increment:
                     self.__variables[current_instruction.sentence.command.variable] += 1
-                elif (current_instruction.sentence.command.command_type == _compiler.VariableCommandType.Decrement and
+                elif (current_instruction.sentence.command.command_type == VariableCommandType.Decrement and
                       self.__variables[current_instruction.sentence.command.variable] > 0):
                     self.__variables[current_instruction.sentence.command.variable] -= 1
 
             self.__instructions_performed += 1
 
         if self.__instruction_index == len(self.__program.instructions):
-            return self.__variables[_compiler.Variable("Y", 1)]
+            return self.__variables[Variable("Y", 1)]
 
     def reset(self,
               *x: int) -> None:
+        from .compiler import Variable
         if any(value < 0 for value in x):
             raise InterpreterError("Given negative input values! Only non-negatives in S!")
 
@@ -74,10 +77,10 @@ class Interpreter:
         self.__variables.update({
             variable: value
             for index, value in enumerate(x)
-            if (variable := _compiler.Variable("X", index + 1)) in self.__variables
+            if (variable := Variable("X", index + 1)) in self.__variables
         })
 
-        self.__variables[_compiler.Variable("Y", 1)] = 0
+        self.__variables[Variable("Y", 1)] = 0
         self.__instruction_index = 0
         self.__instructions_performed = 0
 
@@ -111,7 +114,7 @@ def main() -> None:
     with open(arguments.binary, "r") as binary_file:
         binary_file_content: list[str] = binary_file.readlines()
 
-    interpreter: Interpreter = Interpreter(_compiler.Program.compile(*binary_file_content))
+    interpreter: Interpreter = Interpreter(_Program.compile(*binary_file_content))
     print(f"Output: {interpreter.run(*arguments.x)}")
 
     if arguments.run_info:
