@@ -27,9 +27,9 @@ jobs:
   deploy:
     executor: python/default
     steps:
+      - checkout
       - attach_workspace:
           at: ~/project
-      - checkout
       - python/install-packages:
           pkg-manager: pip
       - run: pip install twine && twine upload dist/*
