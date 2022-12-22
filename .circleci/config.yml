@@ -13,7 +13,7 @@ jobs:
       - persist_to_workspace:
           root: ~/project
           paths:
-            - .
+            - dist
   test:
     executor: python/default
     steps:
@@ -23,14 +23,12 @@ jobs:
       - run:
           name: Testing S Compiler/Interpreter
           command: echo Here Be Pytest
-      - persist_to_workspace:
-          root: ~/project
-          paths:
-            - dist
 
   deploy:
     executor: python/default
     steps:
+      - attach_workspace:
+          at: ~/project
       - checkout
       - python/install-packages:
           pkg-manager: pip
@@ -46,6 +44,6 @@ workflows:
       - deploy:
           requires:
             - test
-          filters:
-            branches:
-              only: master
+#          filters:
+#            branches:
+#              only: master
