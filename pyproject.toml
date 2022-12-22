@@ -24,3 +24,7 @@ classifiers = [
 [project.urls]
 "Homepage" = "https://github.com/SamuelSill/s_interpreter"
 "Bug Tracker" = "https://github.com/SamuelSill/s_interpreter/issues"
+
+[project.scripts]
+s_compiler = "compiler:main"
+s_interpreter = "interpreter:main"

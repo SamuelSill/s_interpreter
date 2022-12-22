@@ -11,7 +11,9 @@ jobs:
           pkg-manager: pip
       - run:
           name: Building Distribution
-          command: python -m build
+          command: |
+            pip install build
+            python -m build
       - persist_to_workspace:
           root: ~/project
           paths:
