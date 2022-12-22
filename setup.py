@@ -18,5 +18,9 @@ setup(
         "Intended Audience :: Developers",
         'License :: MIT License',
         "Programming Language :: Python :: 3",
-    ]
+    ],
+    entry_points={
+        'console_scripts': ['s_interpreter=interpreter:main',
+                            's_compiler=compiler:main'],
+    },
 )
