@@ -36,7 +36,7 @@
 ## Installation
 Install (and update) using `pip`:
 ```shell
-pip install s_interpreter
+pip install -U s_interpreter
 ```
 or you can clone the repository using `git`:
 ```shell
