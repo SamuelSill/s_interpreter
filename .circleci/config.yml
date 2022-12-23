@@ -36,7 +36,12 @@ jobs:
           at: ~/project
       - python/install-packages:
           pkg-manager: pip
-      - run: pip install twine && twine upload --skip-existing --repository testpypi dist/*
+      - run:
+          name: Uploading To Test Pypi
+          command: pip install twine && twine upload --skip-existing --repository testpypi dist/*
+      - run:
+          name: Uploading To Pypi
+          command: pip install twine && twine upload --skip-existing dist/*
 
 workflows:
   test_my_app:
