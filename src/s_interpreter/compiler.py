@@ -13,7 +13,11 @@ def encode_pair(pair: tuple[int, int]) -> int:
 
 
 def encode_list(number_list: list[int]) -> int:
+    if len(number_list) == 0:
+        return 1
+
     from sympy.ntheory import primerange, prime
+
     primes: list[int] = primerange(prime(len(number_list)) + 1)
     mul: int = 1
     for p, exponent in zip(primes, number_list):
@@ -88,7 +92,7 @@ class Label:
         raise CompilationFailure(f"Failed to compile label: \"{label_string}\"")
 
     def encode(self) -> int:
-        return (self.index - 1) * (ord("E") - ord("A")) + (ord(self.name) - ord("A") + 1)
+        return (self.index - 1) * (ord("E") - ord("A") + 1) + (ord(self.name) - ord("A") + 1)
 
     @staticmethod
     def decode(encoded_label: int) -> "Label":
