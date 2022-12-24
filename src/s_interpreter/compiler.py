@@ -162,6 +162,13 @@ class Variable:
     def __str__(self) -> str:
         return self.name + ("" if self.index == 1 else str(self.index))
 
+    def __eq__(self,
+               other: "Variable") -> bool:
+        return self.name.upper() == other.name.upper() and self.index == other.index
+
+    def __hash__(self) -> int:
+        return hash((self.name.upper(), self.index))
+
 
 @_dataclass(frozen=True)
 class Label:
@@ -200,6 +207,13 @@ class Label:
 
     def __str__(self) -> str:
         return f"{self.name}" + ("" if self.index == 1 else str(self.index))
+
+    def __eq__(self,
+               other: "Label") -> bool:
+        return self.name.upper() == other.name.upper() and self.index == other.index
+
+    def __hash__(self) -> int:
+        return hash((self.name.upper(), self.index))
 
 
 class VariableCommandType(_enum.IntEnum):
@@ -245,7 +259,7 @@ class VariableCommandType(_enum.IntEnum):
 VariableCommandType._pattern = _re.compile(r"(?P<operation>[+-])\s*1")
 
 
-@_dataclass(frozen=True)
+@_dataclass(frozen=True, eq=True)
 class VariableCommand:
     variable: Variable
     command_type: VariableCommandType
@@ -256,7 +270,7 @@ class VariableCommand:
         )
 
 
-@_dataclass(frozen=True)
+@_dataclass(frozen=True, eq=True)
 class JumpCommand:
     variable: Variable
     label: Label
@@ -265,7 +279,7 @@ class JumpCommand:
         return f"IF {str(self.variable)} != 0 GOTO {str(self.label)}"
 
 
-@_dataclass(frozen=True)
+@_dataclass(frozen=True, eq=True)
 class Sentence:
     from typing import Union as _Union
 
@@ -326,7 +340,7 @@ class Sentence:
         return str(self.command)
 
 
-@_dataclass(frozen=True)
+@_dataclass(frozen=True, eq=True)
 class Instruction:
     from typing import Optional as _Optional
 
@@ -361,7 +375,7 @@ class Instruction:
         label_encoding, sentence_encoding = repr_
         return Instruction(
             Label.decode(label_encoding)
-            if label_encoding > 0
+            if label_encoding != 0
             else
             None,
             Sentence.decode_repr(sentence_encoding)
@@ -386,7 +400,7 @@ class Instruction:
 _program_recursion_depth: int = 0
 
 
-@_dataclass(frozen=True)
+@_dataclass(frozen=True, eq=True)
 class Program:
     from typing import Optional as _Optional
 
@@ -564,7 +578,7 @@ class Program:
         )
 
 
-@_dataclass(frozen=True)
+@_dataclass(frozen=True, eq=True)
 class Const:
     value: int
 

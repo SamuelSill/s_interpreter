@@ -10,7 +10,7 @@ from s_interpreter.compiler import *
                              (-1, -1),
                              (-10, -10)
                          ])
-def test_create_invalid_pair(pair: tuple[int, int]) -> None:
+def test_pair_error(pair: tuple[int, int]) -> None:
     with pytest.raises(ValueError):
         EncodedPair(*pair)
 
@@ -24,7 +24,7 @@ def test_create_invalid_pair(pair: tuple[int, int]) -> None:
                              [-1, -1],
                              [-10, -10]
                          ])
-def test_create_invalid_pair(list_: list[int]) -> None:
+def test_list_error(list_: list[int]) -> None:
     with pytest.raises(ValueError):
         EncodedList(list_)
 
@@ -38,10 +38,21 @@ def test_create_invalid_pair(list_: list[int]) -> None:
                              (EncodedPair(3, 2), 39),
                              (EncodedPair(2, 3), 27),
                          ])
-def test_encoded_pair(pair: EncodedPair,
-                      encoding: int) -> None:
+def test_encode_pair(pair: EncodedPair,
+                     encoding: int) -> None:
     assert pair.encode() == encoding
     assert EncodedPair.decode(encoding) == pair
+
+
+@pytest.mark.parametrize("encoding",
+                         [
+                             -1,
+                             -2,
+                             -3
+                         ])
+def test_decode_pair_error(encoding: int) -> None:
+    with pytest.raises(ValueError):
+        EncodedPair.decode(encoding)
 
 
 @pytest.mark.parametrize(("list_", "encoding"),
@@ -60,6 +71,18 @@ def test_encode_list(list_: EncodedList,
     assert EncodedList.decode(encoding) == list_
 
 
+@pytest.mark.parametrize("encoding",
+                         [
+                             0,
+                             -1,
+                             -2,
+                             -3
+                         ])
+def test_decode_list_error(encoding: int) -> None:
+    with pytest.raises(ValueError):
+        EncodedList.decode(encoding)
+
+
 @pytest.mark.parametrize(("variable", "encoding"),
                          [
                              (Variable("Y", 1), 1),
@@ -73,6 +96,18 @@ def test_encode_variable(variable: Variable,
                          encoding: int) -> None:
     assert variable.encode() == encoding
     assert Variable.decode(encoding) == variable
+
+
+@pytest.mark.parametrize("encoding",
+                         [
+                             0,
+                             -1,
+                             -2,
+                             -3
+                         ])
+def test_decode_variable_error(encoding: int) -> None:
+    with pytest.raises(ValueError):
+        Variable.decode(encoding)
 
 
 @pytest.mark.parametrize(("label", "encoding"),
@@ -95,6 +130,18 @@ def test_encode_label(label: Label,
     assert Label.decode(encoding) == label
 
 
+@pytest.mark.parametrize("encoding",
+                         [
+                             0,
+                             -1,
+                             -2,
+                             -3
+                         ])
+def test_decode_label_error(encoding: int) -> None:
+    with pytest.raises(ValueError):
+        Label.decode(encoding)
+
+
 @pytest.mark.parametrize(("variable_command_type", "encoding"),
                          [
                              (VariableCommandType.NoOp, 0),
@@ -105,6 +152,19 @@ def test_encode_variable_command_type(variable_command_type: VariableCommandType
                                       encoding: int) -> None:
     assert variable_command_type.encode() == encoding
     assert VariableCommandType.decode(encoding) == variable_command_type
+
+
+@pytest.mark.parametrize("encoding",
+                         [
+                             4,
+                             3,
+                             -1,
+                             -2,
+                             -3
+                         ])
+def test_decode_variable_command_type_error(encoding: int) -> None:
+    with pytest.raises(ValueError):
+        VariableCommandType.decode(encoding)
 
 
 @pytest.mark.parametrize(("sentence", "encoding"),
@@ -146,6 +206,17 @@ def test_encode_sentence(sentence: Sentence,
     assert Sentence.decode(encoding) == sentence
 
 
+@pytest.mark.parametrize("encoding",
+                         [
+                             -1,
+                             -2,
+                             -3
+                         ])
+def test_decode_sentence_error(encoding: int) -> None:
+    with pytest.raises(ValueError):
+        Sentence.decode(encoding)
+
+
 @pytest.mark.parametrize(("sentence", "encoding"),
                          [
                              (
@@ -185,6 +256,19 @@ def test_encode_sentence_repr(sentence: Sentence,
     assert Sentence.decode_repr(encoding) == sentence
 
 
+@pytest.mark.parametrize("encoding",
+                         [
+                             (0, -1),
+                             (1, -1),
+                             (-1, 0),
+                             (-1, 1),
+                             (-1, -1),
+                         ])
+def test_decode_repr_sentence_error(encoding: tuple[int, int]) -> None:
+    with pytest.raises(ValueError):
+        Sentence.decode_repr(encoding)
+
+
 @pytest.mark.parametrize(("instruction", "encoding"),
                          [
                              (
@@ -206,6 +290,17 @@ def test_encode_instruction(instruction: Instruction,
     assert Instruction.decode(encoding) == instruction
 
 
+@pytest.mark.parametrize("encoding",
+                         [
+                             -1,
+                             -2,
+                             -3
+                         ])
+def test_decode_sentence_error(encoding: int) -> None:
+    with pytest.raises(ValueError):
+        Instruction.decode(encoding)
+
+
 @pytest.mark.parametrize(("instruction", "encoding"),
                          [
                              (
@@ -225,6 +320,39 @@ def test_encode_instruction_repr(instruction: Instruction,
                                  encoding: tuple[int, tuple[int, int]]) -> None:
     assert instruction.encode_repr() == encoding
     assert Instruction.decode_repr(encoding) == instruction
+
+
+@pytest.mark.parametrize("encoding",
+                         [
+                             (1, (1, -1)),
+                             (1, (0, -1)),
+                             (0, (1, -1)),
+                             (0, (0, -1)),
+
+                             (1, (-1, 1)),
+                             (1, (-1, 0)),
+                             (0, (-1, 1)),
+                             (0, (-1, 0)),
+
+                             (-1, (1, 1)),
+                             (-1, (1, 0)),
+                             (-1, (0, 1)),
+                             (-1, (0, 0)),
+
+                             (1, (-1, -1)),
+                             (0, (-1, -1)),
+
+                             (-1, (1, -1)),
+                             (-1, (0, -1)),
+
+                             (-1, (-1, 1)),
+                             (-1, (-1, 0)),
+
+                             (-1, (-1, -1)),
+                         ])
+def test_decode_repr_sentence_error(encoding: tuple[int, tuple[int, int]]) -> None:
+    with pytest.raises(ValueError):
+        Instruction.decode_repr(encoding)
 
 
 @pytest.mark.parametrize(("program", "encoding"),
@@ -255,6 +383,17 @@ def test_encode_program(program: Program,
     assert Program.decode(encoding) == program
 
 
+@pytest.mark.parametrize("encoding",
+                         [
+                             -1,
+                             -2,
+                             -3
+                         ])
+def test_decode_program_error(encoding: int) -> None:
+    with pytest.raises(ValueError):
+        Program.decode(encoding)
+
+
 @pytest.mark.parametrize(("program", "encoding"),
                          [
                              (
@@ -281,3 +420,13 @@ def test_encode_program_repr(program: Program,
                              encoding: list[tuple[int, tuple[int, int]]]) -> None:
     assert program.encode_repr() == encoding
     assert Program.decode_repr(encoding) == program
+
+
+@pytest.mark.parametrize("encoding",
+                         [
+                             [(0, (3, 0)), (-1, (3, 0))],
+                             [(0, (3, -1))]
+                         ])
+def test_decode_repr_program_error(encoding: list[tuple[int, tuple[int, int]]]) -> None:
+    with pytest.raises(ValueError):
+        Program.decode_repr(encoding)
