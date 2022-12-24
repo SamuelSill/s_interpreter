@@ -288,7 +288,7 @@ class Sentence:
                                                              r"GOTO\s+(?P<label>[A-E]([1-9][0-9]*)?)\s*",
                                                              flags=_re.IGNORECASE)
     _variable_pattern: _ClassVar[_re.Pattern[str]] = _re.compile(r"\s*(?P<variable>[XYZ]([1-9][0-9]*)?)\s*<\s*-"
-                                                                 r"\s*(?P=variable)\s*(?P<operation>([+-]\s*1)?)",
+                                                                 r"\s*(?P=variable)\s*(?P<operation>([+-]\s*1)?)\s*",
                                                                  flags=_re.IGNORECASE)
 
     @staticmethod
