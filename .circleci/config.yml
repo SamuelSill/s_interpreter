@@ -34,7 +34,9 @@ jobs:
           command: pip install pytest
       - run:
           name: Testing S Compiler/Interpreter
-          command: python -m pytest .
+          command: python -m pytest --junitxml=test-results .
+      - store_test_results:
+          path: test-results
 
   deploy:
     docker:
