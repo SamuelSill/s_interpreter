@@ -264,6 +264,42 @@ class VariableCommand:
     variable: Variable
     command_type: VariableCommandType
 
+    _variable_pattern: _ClassVar[_re.Pattern[str]] = _re.compile(r"\s*(?P<variable>[XYZ]([1-9][0-9]*)?)\s*<\s*-"
+                                                                 r"\s*(?P=variable)\s*(?P<operation>([+-]\s*1)?)\s*",
+                                                                 flags=_re.IGNORECASE)
+
+    @staticmethod
+    def compile(variable_command: str) -> "VariableCommand":
+        if variable_match := _re.fullmatch(VariableCommand._variable_pattern, variable_command):
+            return VariableCommand(Variable.compile(variable_match.group("variable")),
+                                   VariableCommandType.compile(variable_match.group("operation")))
+        raise CompilationError(f"Failed to compile variable command: \"{variable_command}\"")
+
+    def encode_repr(self) -> tuple[int, int]:
+        return (
+            self.command_type.encode(),
+            self.variable.encode() - 1
+        )
+
+    @staticmethod
+    def decode_repr(repr_: tuple[int, int]) -> "VariableCommand":
+        command_type, variable_encoding = repr_
+        if command_type > 2:
+            raise ValueError(f"{__class__.__name__} encoding first element must be less than or equal to 2: {repr_}")
+        return VariableCommand(
+            Variable.decode(variable_encoding + 1),
+            VariableCommandType.decode(command_type)
+        )
+
+    def encode(self) -> int:
+        return EncodedPair(*self.encode_repr()).encode()
+
+    @staticmethod
+    def decode(encoded_sentence: int) -> "VariableCommand":
+        if encoded_sentence < 0:
+            raise ValueError(f"{__class__.__name__} encoding must be non-negative!")
+        return VariableCommand.decode_repr(tuple(EncodedPair.decode(encoded_sentence)))
+
     def __str__(self) -> str:
         return (
             f"{str(self.variable)} <- {str(self.variable)}{str(self.command_type)}"
@@ -275,6 +311,42 @@ class JumpCommand:
     variable: Variable
     label: Label
 
+    _jump_pattern: _ClassVar[_re.Pattern[str]] = _re.compile(r"\s*IF\s+(?P<variable>[XYZ]([1-9][0-9]*)?)\s*!\s*=\s*0\s+"
+                                                             r"GOTO\s+(?P<label>[A-E]([1-9][0-9]*)?)\s*",
+                                                             flags=_re.IGNORECASE)
+
+    @staticmethod
+    def compile(jump_command: str) -> "JumpCommand":
+        if jump_match := _re.fullmatch(JumpCommand._jump_pattern, jump_command):
+            return JumpCommand(Variable.compile(jump_match.group("variable")),
+                               Label.compile(jump_match.group("label")))
+        raise CompilationError(f"Failed to compile jump command: \"{jump_command}\"")
+
+    def encode_repr(self) -> tuple[int, int]:
+        return (
+            self.label.encode() + 2,
+            self.variable.encode() - 1
+        )
+
+    @staticmethod
+    def decode_repr(repr_: tuple[int, int]) -> "JumpCommand":
+        command_type, variable_encoding = repr_
+        if command_type <= 2:
+            raise ValueError(f"{__class__.__name__} encoding first element must be greater than 2: {repr_}")
+        return JumpCommand(
+            Variable.decode(variable_encoding + 1),
+            Label.decode(command_type - 2)
+        )
+
+    def encode(self) -> int:
+        return EncodedPair(*self.encode_repr()).encode()
+
+    @staticmethod
+    def decode(encoded_sentence: int) -> "JumpCommand":
+        if encoded_sentence < 0:
+            raise ValueError(f"{__class__.__name__} encoding must be non-negative!")
+        return JumpCommand.decode_repr(tuple(EncodedPair.decode(encoded_sentence)))
+
     def __str__(self) -> str:
         return f"IF {str(self.variable)} != 0 GOTO {str(self.label)}"
 
@@ -284,51 +356,36 @@ class Sentence:
     from typing import Union as _Union
 
     command: _Union[JumpCommand, VariableCommand]
-    _jump_pattern: _ClassVar[_re.Pattern[str]] = _re.compile(r"\s*IF\s+(?P<variable>[XYZ]([1-9][0-9]*)?)\s*!\s*=\s*0\s+"
-                                                             r"GOTO\s+(?P<label>[A-E]([1-9][0-9]*)?)\s*",
-                                                             flags=_re.IGNORECASE)
-    _variable_pattern: _ClassVar[_re.Pattern[str]] = _re.compile(r"\s*(?P<variable>[XYZ]([1-9][0-9]*)?)\s*<\s*-"
-                                                                 r"\s*(?P=variable)\s*(?P<operation>([+-]\s*1)?)\s*",
-                                                                 flags=_re.IGNORECASE)
 
     @staticmethod
     def compile(sentence: str) -> "Sentence":
-        if jump_match := _re.fullmatch(Sentence._jump_pattern, sentence):
-            return Sentence(JumpCommand(Variable.compile(jump_match.group("variable")),
-                                        Label.compile(jump_match.group("label"))))
-        if variable_match := _re.fullmatch(Sentence._variable_pattern, sentence):
-            return Sentence(VariableCommand(Variable.compile(variable_match.group("variable")),
-                                            VariableCommandType.compile(variable_match.group("operation"))))
+        try:
+            return Sentence(JumpCommand.compile(sentence))
+        except CompilationError:
+            pass
+
+        try:
+            return Sentence(VariableCommand.compile(sentence))
+        except CompilationError:
+            pass
+
         raise CompilationError(f"Failed to compile sentence: \"{sentence}\"")
 
     def encode_repr(self) -> tuple[int, int]:
-        return (
-            self.command.command_type.encode()
-            if type(self.command) is VariableCommand
-            else
-            self.command.label.encode() + 2,
-            self.command.variable.encode() - 1
-        )
+        return self.command.encode_repr()
 
     @staticmethod
     def decode_repr(repr_: tuple[int, int]) -> "Sentence":
         command_type, variable_encoding = repr_
-        variable_encoding += 1
         return Sentence(
-            JumpCommand(
-                Variable.decode(variable_encoding),
-                Label.decode(command_type - 2)
-            )
+            JumpCommand.decode_repr((command_type, variable_encoding))
             if command_type > 2
             else
-            VariableCommand(
-                Variable.decode(variable_encoding),
-                VariableCommandType.decode(command_type)
-            )
+            VariableCommand.decode_repr((command_type, variable_encoding))
         )
 
     def encode(self) -> int:
-        return EncodedPair(*self.encode_repr()).encode()
+        return self.command.encode()
 
     @staticmethod
     def decode(encoded_sentence: int) -> "Sentence":

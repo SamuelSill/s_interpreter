@@ -65,7 +65,8 @@ def test_label_compile(label_string: str,
                                  f"{letter}{index}"
                                  for letter in VARIABLE_NAMES
                                  for index in (1, 2, 3)
-                             ]
+                             ],
+                             "ABC"
                          ])
 def test_label_compilation_error(label_string: str) -> None:
     with pytest.raises(CompilationError):

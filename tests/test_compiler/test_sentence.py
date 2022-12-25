@@ -4,14 +4,18 @@ from s_interpreter.compiler import *
 from conftest import *
 
 
-@pytest.mark.parametrize(("sentence_string", "variable_command"),
+@pytest.mark.dependency()
+@pytest.mark.parametrize(("variable_command_string", "compiled_variable_command"),
                          [
                              *[
-                                 (f"{variable_name}{index}<-{variable_name}{index}",
+                                 (f"{variable_name}{index} <- {variable_name}{index}{operation}",
                                   VariableCommand(Variable(variable_name, index),
-                                                  VariableCommandType.NoOp))
+                                                  command_type))
                                  for variable_name in VARIABLE_NAMES
                                  for index in (1, 2, 3)
+                                 for operation, command_type in (("", VariableCommandType.NoOp),
+                                                                 (" + 1", VariableCommandType.Increment),
+                                                                 (" - 1", VariableCommandType.Decrement))
                                  if variable_name != "Y" or index == 1
                              ],
                              *[
@@ -26,46 +30,38 @@ from conftest import *
                                  for post_arrow_whitespace in OPTIONAL_WHITESPACE
                              ],
                              *[
-                                 (f"{variable_name}{index}<-{variable_name}{index}{operation}1",
-                                  VariableCommand(Variable(variable_name, index),
-                                                  command_type))
-                                 for variable_name in VARIABLE_NAMES
-                                 for index in (1, 2, 3)
-                                 for operation, command_type in (("+", VariableCommandType.Increment),
-                                                                 ("-", VariableCommandType.Decrement))
-                                 if variable_name != "Y" or index == 1
-                             ],
-                             *[
                                  (f"{pre_whitespace}X"
                                   f"{pre_arrow_whitespace}<-"
                                   f"{post_arrow_whitespace}X"
-                                  f"{pre_inc_whitespace}+"
-                                  f"{post_inc_whitespace}1"
+                                  f"{pre_operation_whitespace}{operation}"
+                                  f"{post_operation_whitespace}1"
                                   f"{post_whitespace}",
-                                  VariableCommand(Variable("X", 1), VariableCommandType.Increment))
+                                  VariableCommand(Variable("X", 1), command_type))
+                                 for operation, command_type in (("+", VariableCommandType.Increment),
+                                                                 ("-", VariableCommandType.Decrement))
                                  for pre_whitespace in OPTIONAL_WHITESPACE
                                  for post_whitespace in OPTIONAL_WHITESPACE
                                  for pre_arrow_whitespace in OPTIONAL_WHITESPACE
                                  for post_arrow_whitespace in OPTIONAL_WHITESPACE
-                                 for pre_inc_whitespace in OPTIONAL_WHITESPACE
-                                 for post_inc_whitespace in OPTIONAL_WHITESPACE
+                                 for pre_operation_whitespace in OPTIONAL_WHITESPACE
+                                 for post_operation_whitespace in OPTIONAL_WHITESPACE
                              ]
                          ])
-def test_variable_command_compile(sentence_string: str,
-                                  variable_command: VariableCommand) -> None:
-    assert Sentence.compile(sentence_string) == Sentence(variable_command)
+def test_variable_command_compile(variable_command_string: str,
+                                  compiled_variable_command: VariableCommand) -> None:
+    assert VariableCommand.compile(variable_command_string) == compiled_variable_command
 
 
-@pytest.mark.parametrize(("sentence_string", "jump_command"),
+@pytest.mark.parametrize(("jump_command_string", "compiled_jump_command"),
                          [
                              *[
-                                 (f"IF {variable_name}{variable_index}!=0 GOTO {label_name}{label_index}",
+                                 (f"IF {variable_name}{variable_index} != 0 GOTO {label_name}{label_index}",
                                   JumpCommand(Variable(variable_name, variable_index),
-                                              Label(label_name, label_index)))
+                                              Label(label_name, 1 if label_index == "" else label_index)))
                                  for variable_name in VARIABLE_NAMES
                                  for variable_index in (1, 2, 3)
                                  for label_name in LABEL_NAMES
-                                 for label_index in (1, 2, 3)
+                                 for label_index in ("", 1, 2, 3)
                                  if variable_name != "Y" or variable_index == 1
                              ],
                              *[
@@ -86,9 +82,9 @@ def test_variable_command_compile(sentence_string: str,
                              ],
                              ("iF X!=0 goTO A", JumpCommand(Variable("X", 1), Label("A", 1)))
                          ])
-def test_jump_command_compile(sentence_string: str,
-                              jump_command: JumpCommand):
-    assert Sentence.compile(sentence_string) == Sentence(jump_command)
+def test_jump_command_compile(jump_command_string: str,
+                              compiled_jump_command: JumpCommand):
+    assert JumpCommand.compile(jump_command_string) == compiled_jump_command
 
 
 @pytest.mark.parametrize("sentence_string",
@@ -108,6 +104,7 @@ def test_jump_command_compile(sentence_string: str,
                              "IF X!=0GOTO A",
                              "IF X!=0 GOTOA",
                              "IFX!=0 GOTO A",
+                             "ABC"
                          ])
 def test_sentence_compilation_error(sentence_string: str) -> None:
     with pytest.raises(CompilationError):

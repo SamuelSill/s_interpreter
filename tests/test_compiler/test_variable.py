@@ -73,6 +73,7 @@ def test_variable_compile(variable_string: str,
                              ],
                              "Y2",
                              "Y3",
+                             "ABC"
                          ])
 def test_variable_compilation_error(variable_string: str) -> None:
     with pytest.raises(CompilationError):
