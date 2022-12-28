@@ -705,8 +705,8 @@ class SyntacticSugar:
 
             if variable_name in self.__argument_name_to_type:
                 if self.__argument_name_to_type[variable_name] != variable_type:
-                    raise CompilationError(f"Sugar back-reference does not maintain the same type "
-                                           f"({self.__argument_name_to_type[variable_name]} != {variable_type})")
+                    raise ValueError(f"Sugar back-reference does not maintain the same type "
+                                     f"({self.__argument_name_to_type[variable_name]} != {variable_type})")
             else:
                 self.__argument_name_to_type[variable_name] = variable_type
 
