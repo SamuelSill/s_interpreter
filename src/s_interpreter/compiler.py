@@ -4,55 +4,152 @@ from typing import ClassVar as _ClassVar
 import re as _re
 
 
-class CompilationFailure(RuntimeError):
+class CompilationError(RuntimeError):
     pass
 
 
-def encode_pair(pair: tuple[int, int]) -> int:
-    return (2 ** pair[0]) * (2 * pair[1] + 1) - 1
+class EncodedPair:
+    from typing import Optional as _Optional
+
+    def __init__(self,
+                 first: int,
+                 second: int):
+        self.__tuple: tuple[int, int] = first, second
+
+        if any(element < 0 for element in self.__tuple):
+            raise ValueError(f"{__class__.__name__} must be of non-negatives!")
+
+    def encode(self) -> int:
+        return (2 ** self[0]) * (2 * self[1] + 1) - 1
+
+    def __getitem__(self,
+                    index: int) -> int:
+        return self.__tuple[index]
+
+    def __int__(self) -> int:
+        return self.encode()
+
+    def __str__(self) -> str:
+        return str(self.__tuple)
+
+    def __eq__(self,
+               other: _Optional["EncodedPair"]) -> bool:
+        return other is not None and self.__tuple == other.__tuple
+
+    @staticmethod
+    def decode(pair_encoding: int) -> "EncodedPair":
+        if pair_encoding < 0:
+            raise ValueError(f"{__class__.__name__} encoding must be non-negative!")
+
+        from sympy.ntheory import factorint
+        pair_encoding += 1
+        factorization: dict[int, int] = factorint(pair_encoding)
+        return EncodedPair(factorization.get(2, 0),
+                           ((pair_encoding // (2 ** factorization.get(2, 0))) - 1) // 2)
 
 
-def encode_list(number_list: list[int]) -> int:
-    from sympy.ntheory import primerange, prime
-    primes: list[int] = primerange(prime(len(number_list)) + 1)
-    mul: int = 1
-    for p, exponent in zip(primes, number_list):
-        mul *= p ** exponent
-    return mul
+class EncodedList:
+    from typing import Iterator as _Iterator, Optional as _Optional
+
+    def __init__(self,
+                 list_: list[int]):
+        self.__list: list[int] = list_.copy()
+
+        if any(element < 0 for element in self.__list):
+            raise ValueError(f"{__class__.__name__} must be of non-negatives!")
+
+    def encode(self) -> int:
+        if len(self.__list) == 0:
+            return 1
+
+        from sympy.ntheory import primerange, prime
+
+        mul: int = 1
+        for p, exponent in zip(primerange(prime(len(self.__list)) + 1), self.__list):
+            mul *= p ** exponent
+        return mul
+
+    def __getitem__(self,
+                    index: int) -> int:
+        return self.__list[index]
+
+    def __setitem__(self,
+                    index: int,
+                    value: int) -> None:
+        self.__list[index] = value
+
+    def __int__(self) -> int:
+        return self.encode()
+
+    def __str__(self) -> str:
+        return str(self.__list)
+
+    def __eq__(self,
+               other: _Optional["EncodedList"]) -> bool:
+        return other is not None and self.__list == other.__list
+
+    def __iter__(self) -> _Iterator[int]:
+        return iter(self.__list)
+
+    @staticmethod
+    def decode(number: int) -> "EncodedList":
+        if number < 1:
+            raise ValueError(f"{__class__.__name__} encoding must be positive!")
+
+        from sympy.ntheory import primerange, factorint
+
+        factorization: dict[int, int] = factorint(number)
+        return EncodedList([
+            factorization.get(prime, 0)
+            for prime in primerange(max(factorization, default=0) + 1)
+        ])
 
 
 @_dataclass(frozen=True)
 class Variable:
+    from typing import Optional as _Optional
+
     name: str
     index: int = 1
     _pattern: _ClassVar[_re.Pattern[str]] = _re.compile(r"\s*(?P<variable_name>[XYZ])(?P<index>([1-9][0-9]*)?)\s*",
                                                         flags=_re.IGNORECASE)
 
+    def __post_init__(self) -> None:
+        if self.name.upper() not in "XYZ":
+            raise ValueError(f"{__class__.__name__} name must be X/Y/Z: '{self.name}'")
+        if self.index < 1:
+            raise ValueError(f"{__class__.__name__} index must be positive: {self.index}")
+        if self.name.upper() == "Y" and self.index > 1:
+            raise ValueError(f"{__class__.__name__} named 'Y' may only be of index 1")
+
     @staticmethod
     def compile(variable_string: str) -> "Variable":
         if variable_match := _re.fullmatch(Variable._pattern, variable_string):
-            variable: Variable = Variable(
-                variable_match.group("variable_name").upper(),
-                int(variable_match.group("index"))
-                if len(variable_match.group("index")) > 0
-                else
-                1
-            )
-
-            if variable.name != "Y" or variable.index == 1:
-                return variable
-        raise CompilationFailure(f"Failed to compile variable: \"{variable_string}\"")
+            try:
+                return Variable(
+                    variable_match.group("variable_name"),
+                    int(variable_match.group("index"))
+                    if len(variable_match.group("index")) > 0
+                    else
+                    1
+                )
+            except ValueError as exception:
+                raise CompilationError(str(exception))
+        raise CompilationError(f"Failed to compile variable: \"{variable_string}\"")
 
     def encode(self) -> int:
         return (
             1
-            if self.name == "Y"
+            if self.name.upper() == "Y"
             else
-            (self.index * 2 + (0 if self.name == "X" else 1))
+            (self.index * 2 + (0 if self.name.upper() == "X" else 1))
         )
 
     @staticmethod
     def decode(encoded_variable: int) -> "Variable":
+        if encoded_variable < 1:
+            raise ValueError(f"{__class__.__name__} encodings must be positive!")
+        encoded_variable -= 1
         return (
             Variable("Y", 1)
             if encoded_variable == 0
@@ -61,7 +158,7 @@ class Variable:
                 "X"
                 if encoded_variable % 2 != 0
                 else
-                "Y",
+                "Z",
                 ((encoded_variable - 1) // 2) + 1
             )
         )
@@ -69,29 +166,46 @@ class Variable:
     def __str__(self) -> str:
         return self.name + ("" if self.index == 1 else str(self.index))
 
+    def __eq__(self,
+               other: _Optional["Variable"]) -> bool:
+        return other is not None and self.name.upper() == other.name.upper() and self.index == other.index
+
+    def __hash__(self) -> int:
+        return hash((self.name.upper(), self.index))
+
 
 @_dataclass(frozen=True)
 class Label:
+    from typing import Optional as _Optional
+
     name: str
     index: int = 1
     _pattern: _ClassVar[_re.Pattern[str]] = _re.compile(r"\s*(?P<label>[A-E])(?P<index>([1-9][0-9]*)?)\s*",
                                                         flags=_re.IGNORECASE)
 
+    def __post_init__(self) -> None:
+        if self.name.upper() not in "ABCDE":
+            raise ValueError(f"{__class__.__name__} must be of name A/B/C/D/E: '{self.name}'")
+        if self.index < 1:
+            raise ValueError(f"{__class__.__name__} index is not positive: {self.index}")
+
     @staticmethod
     def compile(label_string: str) -> "Label":
         if label_match := _re.fullmatch(Label._pattern, label_string):
-            return Label(label_match.group("label").upper(),
+            return Label(label_match.group("label"),
                          int(label_match.group("index"))
                          if len(label_match.group("index")) > 0
                          else
                          1)
-        raise CompilationFailure(f"Failed to compile label: \"{label_string}\"")
+        raise CompilationError(f"Failed to compile label: \"{label_string}\"")
 
     def encode(self) -> int:
-        return (self.index - 1) * (ord("E") - ord("A")) + (ord(self.name) - ord("A") + 1)
+        return (self.index - 1) * (ord("E") - ord("A") + 1) + (ord(self.name.upper()) - ord("A") + 1)
 
     @staticmethod
     def decode(encoded_label: int) -> "Label":
+        if encoded_label < 1:
+            raise ValueError(f"{__class__.__name__} encoding must be positive!")
         return Label(
             "ABCDE"[(encoded_label - 1) % len("ABCDE")],
             ((encoded_label - 1) // 5) + 1
@@ -99,6 +213,13 @@ class Label:
 
     def __str__(self) -> str:
         return f"{self.name}" + ("" if self.index == 1 else str(self.index))
+
+    def __eq__(self,
+               other: _Optional["Label"]) -> bool:
+        return other is not None and self.name.upper() == other.name.upper() and self.index == other.index
+
+    def __hash__(self) -> int:
+        return hash((self.name.upper(), self.index))
 
 
 class VariableCommandType(_enum.IntEnum):
@@ -125,6 +246,10 @@ class VariableCommandType(_enum.IntEnum):
         # noinspection PyTypeChecker
         return int(self.value)
 
+    @staticmethod
+    def decode(encoded_variable_command_type: int) -> "VariableCommandType":
+        return VariableCommandType(encoded_variable_command_type)
+
     def __str__(self) -> str:
         return (
             ""
@@ -140,10 +265,46 @@ class VariableCommandType(_enum.IntEnum):
 VariableCommandType._pattern = _re.compile(r"(?P<operation>[+-])\s*1")
 
 
-@_dataclass(frozen=True)
+@_dataclass(frozen=True, eq=True)
 class VariableCommand:
     variable: Variable
     command_type: VariableCommandType
+
+    _variable_pattern: _ClassVar[_re.Pattern[str]] = _re.compile(r"\s*(?P<variable>[XYZ]([1-9][0-9]*)?)\s*<\s*-"
+                                                                 r"\s*(?P=variable)\s*(?P<operation>([+-]\s*1)?)\s*",
+                                                                 flags=_re.IGNORECASE)
+
+    @staticmethod
+    def compile(variable_command: str) -> "VariableCommand":
+        if variable_match := _re.fullmatch(VariableCommand._variable_pattern, variable_command):
+            return VariableCommand(Variable.compile(variable_match.group("variable")),
+                                   VariableCommandType.compile(variable_match.group("operation")))
+        raise CompilationError(f"Failed to compile variable command: \"{variable_command}\"")
+
+    def encode_repr(self) -> tuple[int, int]:
+        return (
+            self.command_type.encode(),
+            self.variable.encode() - 1
+        )
+
+    @staticmethod
+    def decode_repr(repr_: tuple[int, int]) -> "VariableCommand":
+        command_type, variable_encoding = repr_
+        if command_type > 2:
+            raise ValueError(f"{__class__.__name__} encoding first element must be less than or equal to 2: {repr_}")
+        return VariableCommand(
+            Variable.decode(variable_encoding + 1),
+            VariableCommandType.decode(command_type)
+        )
+
+    def encode(self) -> int:
+        return EncodedPair(*self.encode_repr()).encode()
+
+    @staticmethod
+    def decode(encoded_sentence: int) -> "VariableCommand":
+        if encoded_sentence < 0:
+            raise ValueError(f"{__class__.__name__} encoding must be non-negative!")
+        return VariableCommand.decode_repr(tuple(EncodedPair.decode(encoded_sentence)))
 
     def __str__(self) -> str:
         return (
@@ -151,79 +312,103 @@ class VariableCommand:
         )
 
 
-@_dataclass(frozen=True)
+@_dataclass(frozen=True, eq=True)
 class JumpCommand:
     variable: Variable
     label: Label
+
+    _jump_pattern: _ClassVar[_re.Pattern[str]] = _re.compile(r"\s*IF\s+(?P<variable>[XYZ]([1-9][0-9]*)?)\s*!\s*=\s*0\s+"
+                                                             r"GOTO\s+(?P<label>[A-E]([1-9][0-9]*)?)\s*",
+                                                             flags=_re.IGNORECASE)
+
+    @staticmethod
+    def compile(jump_command: str) -> "JumpCommand":
+        if jump_match := _re.fullmatch(JumpCommand._jump_pattern, jump_command):
+            return JumpCommand(Variable.compile(jump_match.group("variable")),
+                               Label.compile(jump_match.group("label")))
+        raise CompilationError(f"Failed to compile jump command: \"{jump_command}\"")
+
+    def encode_repr(self) -> tuple[int, int]:
+        return (
+            self.label.encode() + 2,
+            self.variable.encode() - 1
+        )
+
+    @staticmethod
+    def decode_repr(repr_: tuple[int, int]) -> "JumpCommand":
+        command_type, variable_encoding = repr_
+        if command_type <= 2:
+            raise ValueError(f"{__class__.__name__} encoding first element must be greater than 2: {repr_}")
+        return JumpCommand(
+            Variable.decode(variable_encoding + 1),
+            Label.decode(command_type - 2)
+        )
+
+    def encode(self) -> int:
+        return EncodedPair(*self.encode_repr()).encode()
+
+    @staticmethod
+    def decode(encoded_sentence: int) -> "JumpCommand":
+        if encoded_sentence < 0:
+            raise ValueError(f"{__class__.__name__} encoding must be non-negative!")
+        return JumpCommand.decode_repr(tuple(EncodedPair.decode(encoded_sentence)))
 
     def __str__(self) -> str:
         return f"IF {str(self.variable)} != 0 GOTO {str(self.label)}"
 
 
-@_dataclass(frozen=True)
+@_dataclass(frozen=True, eq=True)
 class Sentence:
     from typing import Union as _Union
 
     command: _Union[JumpCommand, VariableCommand]
-    _jump_pattern: _ClassVar[_re.Pattern[str]] = _re.compile(r"\s*IF\s+(?P<variable>[XYZ]([1-9][0-9]*)?)\s*!\s*=\s*0\s+"
-                                                             r"GOTO\s+(?P<label>[A-E]([1-9][0-9]*)?)\s*",
-                                                             flags=_re.IGNORECASE)
-    _variable_pattern: _ClassVar[_re.Pattern[str]] = _re.compile(r"\s*(?P<variable>[XYZ]([1-9][0-9]*)?)\s*<\s*-"
-                                                                 r"\s*(?P=variable)\s*(?P<operation>([+-]\s*1)?)",
-                                                                 flags=_re.IGNORECASE)
 
     @staticmethod
     def compile(sentence: str) -> "Sentence":
-        if jump_match := _re.fullmatch(Sentence._jump_pattern, sentence):
-            return Sentence(JumpCommand(Variable.compile(jump_match.group("variable")),
-                                        Label.compile(jump_match.group("label"))))
-        if variable_match := _re.fullmatch(Sentence._variable_pattern, sentence):
-            return Sentence(VariableCommand(Variable.compile(variable_match.group("variable")),
-                                            VariableCommandType.compile(variable_match.group("operation"))))
-        else:
-            raise CompilationFailure(f"Failed to compile sentence: \"{sentence}\"")
+        try:
+            return Sentence(JumpCommand.compile(sentence))
+        except CompilationError:
+            pass
+
+        try:
+            return Sentence(VariableCommand.compile(sentence))
+        except CompilationError:
+            pass
+
+        raise CompilationError(f"Failed to compile sentence: \"{sentence}\"")
 
     def encode_repr(self) -> tuple[int, int]:
-        return (
-            self.command.command_type.encode()
-            if type(self.command) is VariableCommand
+        return self.command.encode_repr()
+
+    @staticmethod
+    def decode_repr(repr_: tuple[int, int]) -> "Sentence":
+        command_type, variable_encoding = repr_
+        return Sentence(
+            JumpCommand.decode_repr((command_type, variable_encoding))
+            if command_type > 2
             else
-            self.command.label.encode() + 2,
-            self.command.variable.encode() - 1
+            VariableCommand.decode_repr((command_type, variable_encoding))
         )
 
     def encode(self) -> int:
-        return encode_pair(self.encode_repr())
+        return self.command.encode()
 
     @staticmethod
     def decode(encoded_sentence: int) -> "Sentence":
-        from sympy.ntheory import factorint
-        encoded_sentence += 1
-        factorization: dict[int, int] = factorint(encoded_sentence)
-
-        return Sentence(
-            JumpCommand(
-                Variable.decode(((encoded_sentence // (2 ** factorization.get(2, 0))) - 1) // 2),
-                Label.decode(factorization[2] - 2)
-            )
-            if factorization.get(2, 0) > 2
-            else
-            VariableCommand(
-                Variable.decode(((encoded_sentence // (2 ** factorization.get(2, 0))) - 1) // 2),
-                VariableCommandType(factorization.get(2, 0))
-            )
-        )
+        if encoded_sentence < 0:
+            raise ValueError(f"{__class__.__name__} encoding must be non-negative!")
+        return Sentence.decode_repr(tuple(EncodedPair.decode(encoded_sentence)))
 
     def __str__(self) -> str:
         return str(self.command)
 
 
-@_dataclass(frozen=True)
+@_dataclass(frozen=True, eq=True)
 class Instruction:
     from typing import Optional as _Optional
 
-    label: _Optional[Label]
     sentence: Sentence
+    label: _Optional[Label] = None
 
     _pattern: _ClassVar[_re.Pattern[str]] = _re.compile(r"\s*(\[\s*(?P<label>[A-E]([1-9][0-9]*)?)\s*])?"
                                                         r"\s*(?P<sentence>.*)\s*",
@@ -232,12 +417,12 @@ class Instruction:
     @staticmethod
     def compile(line: str) -> "Instruction":
         if not (instruction_match := _re.fullmatch(Instruction._pattern, line)):
-            raise CompilationFailure(f"Failed to compile instruction: \"{line}\"")
-        return Instruction(Label.compile(label)
+            raise CompilationError(f"Failed to compile instruction: \"{line}\"")
+        return Instruction(Sentence.compile(instruction_match.group("sentence")),
+                           Label.compile(label)
                            if (label := instruction_match.group("label"))
                            else
-                           None,
-                           Sentence.compile(instruction_match.group("sentence")))
+                           None)
 
     def encode_repr(self) -> tuple[int, tuple[int, int]]:
         return (
@@ -248,23 +433,28 @@ class Instruction:
             self.sentence.encode_repr()
         )
 
+    @staticmethod
+    def decode_repr(repr_: tuple[int, tuple[int, int]]) -> "Instruction":
+        label_encoding, sentence_encoding = repr_
+        return Instruction(
+            Sentence.decode_repr(sentence_encoding),
+            Label.decode(label_encoding)
+            if label_encoding != 0
+            else
+            None
+        )
+
     def encode(self) -> int:
         encoding: tuple[int, tuple[int, int]] = self.encode_repr()
-        return encode_pair((encoding[0], encode_pair(encoding[1])))
+        return EncodedPair(encoding[0], EncodedPair(*encoding[1]).encode()).encode()
 
     @staticmethod
     def decode(encoded_instruction: int) -> "Instruction":
-        from sympy.ntheory import factorint
+        if encoded_instruction < 0:
+            raise ValueError(f"{__class__.__name__} encoding must be non-negative!")
 
-        encoded_instruction += 1
-        factorization: dict[int, int] = factorint(encoded_instruction)
-        return Instruction(
-            Label.decode(factorization[2])
-            if 2 in factorization
-            else
-            None,
-            Sentence.decode(((encoded_instruction // (2 ** factorization.get(2, 0))) - 1) // 2)
-        )
+        label_encoding, sentence_encoding = EncodedPair.decode(encoded_instruction)
+        return Instruction.decode_repr((label_encoding, tuple(EncodedPair.decode(sentence_encoding))))
 
     def __str__(self) -> str:
         return (f"[{str(self.label)}] " if self.label is not None else "") + str(self.sentence)
@@ -273,7 +463,7 @@ class Instruction:
 _program_recursion_depth: int = 0
 
 
-@_dataclass(frozen=True)
+@_dataclass(frozen=True, eq=True)
 class Program:
     from typing import Optional as _Optional
 
@@ -283,6 +473,14 @@ class Program:
                                                                       flags=_re.IGNORECASE)
     _label_length_pattern: _ClassVar[_re.Pattern[str]] = _re.compile(r"(\[.*])?\s*")
 
+    def __post_init__(self) -> None:
+        if (len(self.instructions) > 0 and
+                self.instructions[-1].label is None and
+                type(self.instructions[-1].sentence.command) is VariableCommand and
+                self.instructions[-1].sentence.command.variable.name.upper() == "Y" and
+                self.instructions[-1].sentence.command.command_type == VariableCommandType.NoOp):
+            raise ValueError("Convention of Y<-Y is not respected!")
+
     @_dataclass
     class _SugarJob:
         sugar: "SyntacticSugar"
@@ -290,8 +488,8 @@ class Program:
         index_to_inject: int
 
     @staticmethod
-    def __update_by_instruction(used_variables: set[Variable],
-                                used_labels: set[Label],
+    def __update_by_instruction(used_labels: set[Label],
+                                used_variables: set[Variable],
                                 *instructions_: Instruction) -> None:
         for instruction in instructions_:
             used_variables.add(instruction.sentence.command.variable)
@@ -316,9 +514,9 @@ class Program:
                     used_variables.add(parameter)
             if label_match := _re.fullmatch(Program._labeled_sugar_pattern, line):
                 used_labels.add(new_label := Label.compile(label_match.group("sugar_label")))
-                instructions.append(Instruction(new_label,
-                                                Sentence(VariableCommand(Variable("Y"),
-                                                                         VariableCommandType.NoOp))))
+                instructions.append(Instruction(Sentence(VariableCommand(Variable("Y"),
+                                                                         VariableCommandType.NoOp)),
+                                                new_label))
             return Program._SugarJob(sugar, line, len(instructions))
 
     @_dataclass
@@ -337,10 +535,10 @@ class Program:
         for line in program:
             try:
                 parse_result.instructions.append(Instruction.compile(line))
-                Program.__update_by_instruction(parse_result.used_variables,
-                                                parse_result.used_labels,
+                Program.__update_by_instruction(parse_result.used_labels,
+                                                parse_result.used_variables,
                                                 parse_result.instructions[-1])
-            except CompilationFailure as compilation_failure:
+            except CompilationError as compilation_failure:
                 sugar_job: Optional[Program._SugarJob] = Program.__create_sugar_job(line,
                                                                                     sugars,
                                                                                     parse_result.instructions,
@@ -362,8 +560,8 @@ class Program:
                                                                                 program_parse_result.used_labels,
                                                                                 program_parse_result.used_variables,
                                                                                 verbose).instructions
-            Program.__update_by_instruction(program_parse_result.used_variables,
-                                            program_parse_result.used_labels,
+            Program.__update_by_instruction(program_parse_result.used_labels,
+                                            program_parse_result.used_variables,
                                             *instructions_to_inject)
             for instruction_index, instruction_to_inject in enumerate(instructions_to_inject):
                 program_parse_result.instructions.insert(sugar_job.index_to_inject + instruction_index,
@@ -372,15 +570,6 @@ class Program:
             while sugar_job_index < len(program_parse_result.sugar_jobs):
                 program_parse_result.sugar_jobs[sugar_job_index].index_to_inject += len(instructions_to_inject)
                 sugar_job_index += 1
-
-    @staticmethod
-    def _validate(program_parse_result: _ProgramParseResult) -> None:
-        if (len(program_parse_result.instructions) > 0 and
-                program_parse_result.instructions[-1].label is None and
-                type(program_parse_result.instructions[-1].sentence.command) is VariableCommand and
-                program_parse_result.instructions[-1].sentence.command.variable.name == "Y" and
-                program_parse_result.instructions[-1].sentence.command.command_type == VariableCommandType.NoOp):
-            raise CompilationFailure("Convention of Y<-Y is not respected!")
 
     @staticmethod
     def compile(*program: str,
@@ -393,9 +582,11 @@ class Program:
             program_parse_result: Program._ProgramParseResult = Program._parse(*program,
                                                                                sugars=[] if sugars is None else sugars)
             Program._expand_program(program_parse_result, verbose)
-            Program._validate(program_parse_result)
 
-            return Program(program_parse_result.instructions)
+            try:
+                return Program(program_parse_result.instructions)
+            except ValueError as exception:
+                raise CompilationError(str(exception))
         finally:
             _program_recursion_depth -= 1
 
@@ -405,19 +596,27 @@ class Program:
             for instruction in self.instructions
         ]
 
+    @staticmethod
+    def decode_repr(repr_: list[tuple[int, tuple[int, int]]]) -> "Program":
+        return Program(
+            [
+                Instruction.decode_repr(instruction_encoding)
+                for instruction_encoding in repr_
+            ]
+        )
+
     def encode(self) -> int:
-        return encode_list([instruction.encode() for instruction in self.instructions]) - 1
+        return EncodedList([instruction.encode() for instruction in self.instructions]).encode() - 1
 
     @staticmethod
     def decode(encoded_program: int) -> "Program":
-        from sympy.ntheory import factorint, primerange
+        if encoded_program < 0:
+            raise ValueError(f"{__class__.__name__} encoding must be non-negative!")
 
-        factorization: dict[int, int] = factorint(encoded_program + 1)
-        prime_list: list[int] = primerange(max(factorization) + 1)
         return Program(
             [
-                Instruction.decode(factorization.get(p, 0))
-                for p in prime_list
+                Instruction.decode(instruction_encoding)
+                for instruction_encoding in EncodedList.decode(encoded_program + 1)
             ]
         )
 
@@ -442,7 +641,7 @@ class Program:
         )
 
 
-@_dataclass(frozen=True)
+@_dataclass(frozen=True, eq=True)
 class Const:
     value: int
 
@@ -451,7 +650,7 @@ class Const:
         try:
             return Const(int(const))
         except ValueError:
-            raise CompilationFailure(f"Failed to compile const: {const}")
+            raise CompilationError(f"Failed to compile const: {const}")
 
     def __str__(self) -> str:
         return str(self.value)
@@ -506,8 +705,8 @@ class SyntacticSugar:
 
             if variable_name in self.__argument_name_to_type:
                 if self.__argument_name_to_type[variable_name] != variable_type:
-                    raise CompilationFailure(f"Sugar back-reference does not maintain the same type "
-                                             f"({self.__argument_name_to_type[variable_name]} != {variable_type})")
+                    raise ValueError(f"Sugar back-reference does not maintain the same type "
+                                     f"({self.__argument_name_to_type[variable_name]} != {variable_type})")
             else:
                 self.__argument_name_to_type[variable_name] = variable_type
 
@@ -525,26 +724,33 @@ class SyntacticSugar:
                         r"(?P=\g<argument_name>)",
                         usage)
 
+        if _re.search(r"[{}]", usage):
+            raise ValueError(f"Invalid sugar usage title: {self.__title}")
+
         usage = r"\s*(\[[A-E]([1-9][0-9]*)?\])?\s*" + _re.sub(r"\s+", r"\\s*", usage) + r"\s*"
 
         self.__invocation_regex: _re.Pattern[str] = _re.compile(usage, flags=_re.IGNORECASE)
 
     def __set_implementation(self,
-                             implementation: tuple[str]) -> None:
+                             implementation: tuple[str, ...]) -> None:
         repeat_counter: int = 0
         for line in implementation:
-            if _re.fullmatch(r"\s*{\s*REPEAT\s+.+\s*}\s*",
-                             line,
-                             flags=_re.IGNORECASE):
+            if (match := _re.fullmatch(r"\s*{\s*REPEAT\s+(?P<const_name>[A-Z]([A-Z]|\d)*)\s*}\s*",
+                                       line,
+                                       flags=_re.IGNORECASE)):
+                if match.group("const_name") not in self.__argument_name_to_type:
+                    raise ValueError(f"Unknown const '{match.group('const_name')}' used in repeat!")
+                if self.__argument_name_to_type[match.group("const_name")] is not Const:
+                    raise ValueError(f"'{match.group('const_name')}' used in repeat but isn't const!")
                 repeat_counter += 1
             elif _re.fullmatch(r"\s*{\s*END\s+REPEAT\s*}\s*",
                                line,
                                flags=_re.IGNORECASE):
                 if repeat_counter == 0:
-                    raise CompilationFailure("No 'REPEAT' for matching 'END REPEAT'!")
+                    raise ValueError("No 'REPEAT' for matching 'END REPEAT'!")
                 repeat_counter -= 1
         if repeat_counter > 0:
-            raise CompilationFailure("No 'END REPEAT' for matching 'REPEAT'!")
+            raise ValueError("No 'END REPEAT' for matching 'REPEAT'!")
 
         self.__implementation: tuple[str] = implementation
 
@@ -586,12 +792,39 @@ class SyntacticSugar:
             return label
 
     class _ProgramFixer:
-        from typing import Union as _Union
+        from typing import (
+            Union as _Union,
+            Optional as _Optional
+        )
+
+        def __used_labels_and_variables(self,
+                                        used_labels: _Optional[set[Label]],
+                                        used_variables: _Optional[set[Variable]]) -> tuple[set[Label], set[Variable]]:
+            used_labels = set() if used_labels is None else used_labels
+            used_variables = set() if used_variables is None else used_variables
+            used_label_params: set[Label] = set()
+            used_variable_params: set[Variable] = set()
+
+            for parameter in self.__parameters:
+                if type(parameter) is Label and parameter not in used_labels:
+                    used_label_params.add(parameter)
+                elif type(parameter) is Variable and parameter not in used_variables:
+                    used_variable_params.add(parameter)
+            if len(used_label_params) > 0:
+                used_labels = used_labels.union(used_label_params)
+            if len(used_variable_params) > 0:
+                used_variables = used_variables.union(used_variable_params)
+
+            return used_labels, used_variables
 
         def __init__(self,
-                     used_variables: set[Variable],
-                     used_labels: set[Label]):
+                     parameters: list[_Union[Label, Variable]],
+                     used_labels: _Optional[set[Label]],
+                     used_variables: _Optional[set[Variable]]):
             from typing import Union
+
+            self.__parameters: list[Union[Label, Variable]] = parameters
+            used_labels, used_variables = self.__used_labels_and_variables(used_labels, used_variables)
 
             self.__variable_generator: SyntacticSugar._VariableGenerator = (
                 SyntacticSugar._VariableGenerator(used_variables)
@@ -602,13 +835,12 @@ class SyntacticSugar:
             self.__fixes_to_perform: dict[Union[Label, Variable], Union[Label, Variable]] = {}
             self.__parameter_replacements: dict[str, str] = {}
 
-        def process_parameter_fixes(self,
-                                    parameters: list[_Union[Variable, Label]]) -> None:
+        def process_parameter_fixes(self) -> None:
             max_sugar_internals: int = 1000000000000000
             # Code smell due to the way the algorithm works with the sugar arguments (replacing them at the start
             # and fixing them later alongside the other variables)
 
-            for parameter in parameters:
+            for parameter in self.__parameters:
                 generated: type(parameter) = (
                     self.__label_generator
                     if type(parameter) is Label
@@ -632,7 +864,7 @@ class SyntacticSugar:
                 ):
                     self.__fixes_to_perform[instruction.sentence.command.label] = self.__label_generator.generate()
                 if (
-                    instruction.sentence.command.variable.name not in {"X", "Y"} and
+                    instruction.sentence.command.variable.name.upper() not in {"X", "Y"} and
                     instruction.sentence.command.variable not in self.__fixes_to_perform
                 ):
                     self.__fixes_to_perform[instruction.sentence.command.variable] = (
@@ -650,19 +882,19 @@ class SyntacticSugar:
         def fix_program(self,
                         program: Program) -> Program:
             return Program([
-                Instruction(
-                    self.__fix(instruction.label),
-                    Sentence(
-                        JumpCommand(self.__fix(instruction.sentence.command.variable),
-                                    self.__fix(instruction.sentence.command.label))
-                        if type(instruction.sentence.command) is JumpCommand
-                        else
-                        VariableCommand(self.__fix(instruction.sentence.command.variable),
-                                        instruction.sentence.command.command_type)
+                    Instruction(
+                        Sentence(
+                            JumpCommand(self.__fix(instruction.sentence.command.variable),
+                                        self.__fix(instruction.sentence.command.label))
+                            if type(instruction.sentence.command) is JumpCommand
+                            else
+                            VariableCommand(self.__fix(instruction.sentence.command.variable),
+                                            instruction.sentence.command.command_type)
+                        ),
+                        self.__fix(instruction.label)
                     )
-                )
-                for instruction in program.instructions
-            ])
+                    for instruction in program.instructions
+                ])
 
     def validate(self,
                  invocation: str) -> bool:
@@ -722,11 +954,18 @@ class SyntacticSugar:
                 used_variables: _Optional[set[Variable]] = None,
                 verbose: bool = False) -> Program:
         if (invocation_match := _re.fullmatch(self.__invocation_regex, invocation)) is None:
-            raise CompilationFailure(f"Failed using sugar {self.__title} to compile line: '{invocation}'")
+            raise CompilationError(f"Failed using sugar {self.__title} to compile line: '{invocation}'")
 
-        program_fixer: SyntacticSugar._ProgramFixer = SyntacticSugar._ProgramFixer(used_variables, used_labels)
-        program_fixer.process_parameter_fixes(list(filter(lambda parameter: type(parameter) is not Const,
-                                                          self.__parameters(invocation_match))))
+        program_fixer: SyntacticSugar._ProgramFixer = SyntacticSugar._ProgramFixer(
+            [
+                parameter for parameter in self.__parameters(invocation_match)
+                if type(parameter) is not Const
+            ],
+            used_labels,
+            used_variables
+        )
+
+        program_fixer.process_parameter_fixes()
 
         sugar_program: Program = Program.compile(*self.__generate_instructions(invocation_match, program_fixer),
                                                  sugars=self.__sugars,
@@ -745,7 +984,7 @@ class SyntacticSugar:
                    invocation: str) -> set[_Union[Label, Variable, Const]]:
         if invocation_match := _re.fullmatch(self.__invocation_regex, invocation):
             return self.__parameters(invocation_match)
-        raise CompilationFailure(f"Failed to determine sugar parameters of: '{invocation}'")
+        raise CompilationError(f"Failed to determine sugar parameters of: '{invocation}'")
 
 
 def compile_slang_file(slang_file_path: str,
@@ -764,14 +1003,17 @@ def compile_slang_file(slang_file_path: str,
             pass
         elif title_match := _re.fullmatch(r"\s*>\s*(?P<title>.*)\s*", line):
             if is_main:
-                raise CompilationFailure(f"Encountered sugar title after MAIN: '{line}'")
+                raise CompilationError(f"Encountered sugar title after MAIN: '{line}'")
 
             if is_before_first_sugar:
                 is_before_first_sugar = False
             else:
-                sugars.append(SyntacticSugar(current_section_title,
-                                             *current_section_lines,
-                                             sugars=sugars.copy()))
+                try:
+                    sugars.append(SyntacticSugar(current_section_title,
+                                                 *current_section_lines,
+                                                 sugars=sugars.copy()))
+                except ValueError as exception:
+                    raise CompilationError(str(exception))
             is_main = bool(_re.fullmatch(r"\s*MAIN\s*",
                                          current_section_title := title_match.group("title").split("#")[0].strip(),
                                          _re.IGNORECASE))
@@ -779,10 +1021,10 @@ def compile_slang_file(slang_file_path: str,
         elif line_match := _re.fullmatch(r"\s*(?P<line>.*)\s*", line):
             current_section_lines.append(line_match.group("line").split("#")[0].strip())
         else:
-            raise CompilationFailure(f"Failed to compile line {line_index}: '{line}'")
+            raise CompilationError(f"Failed to compile line {line_index}: '{line}'")
 
     if not is_main:
-        raise CompilationFailure("Nonexistent 'MAIN' section!")
+        raise CompilationError("Nonexistent 'MAIN' section!")
 
     return Program.compile(*current_section_lines,
                            sugars=sugars,
@@ -831,8 +1073,10 @@ def main() -> None:
     compiled_program: Program = (
         compile_slang_file(arguments.file, arguments.verbose)
         if arguments.decode is None
-        else Program.decode(arguments.decode)
+        else
+        Program.decode(arguments.decode)
     )
+
     time_taken_to_compile: float = time() - start_time
 
     if arguments.verbose and arguments.file is not None:
@@ -858,9 +1102,9 @@ if __name__ == '__main__':
     main()
 
 __all__ = (
-    "CompilationFailure",
-    "encode_pair",
-    "encode_list",
+    "CompilationError",
+    "EncodedPair",
+    "EncodedList",
     "Variable",
     "Label",
     "JumpCommand",

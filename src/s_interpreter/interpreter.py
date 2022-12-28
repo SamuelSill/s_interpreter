@@ -1,4 +1,4 @@
-from .compiler import Program as _Program
+from s_interpreter.compiler import Program as _Program
 
 
 class InterpreterError(RuntimeError):
@@ -10,7 +10,7 @@ class Interpreter:
 
     def __init__(self,
                  program: _Program):
-        from .compiler import Label, Variable, JumpCommand
+        from s_interpreter.compiler import Label, Variable, JumpCommand
         self.__program: _Program = program
         self.__instruction_index: int = 0
         self.__instructions_performed: int = 0
@@ -41,7 +41,7 @@ class Interpreter:
         return self.__instructions_performed
 
     def step(self) -> _Optional[int]:
-        from .compiler import Instruction, JumpCommand, VariableCommandType, Variable
+        from s_interpreter.compiler import Instruction, JumpCommand, VariableCommandType, Variable
         if self.__instruction_index < len(self.__program.instructions):
             current_instruction: Instruction = self.__program.instructions[self.__instruction_index]
 
@@ -68,7 +68,7 @@ class Interpreter:
 
     def reset(self,
               *x: int) -> None:
-        from .compiler import Variable
+        from s_interpreter.compiler import Variable
         if any(value < 0 for value in x):
             raise InterpreterError("Given negative input values! Only non-negatives in S!")
 

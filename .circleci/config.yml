@@ -4,7 +4,8 @@ orbs:
 
 jobs:
   build:
-    executor: python/default
+    docker:
+      - image: cimg/python:3.9
     steps:
       - checkout
       - run:
@@ -17,17 +18,29 @@ jobs:
           paths:
             - dist
   test:
-    executor: python/default
+    docker:
+      - image: cimg/python:3.9
     steps:
       - checkout
       - python/install-packages:
           pkg-manager: pip
+      - attach_workspace:
+          at: ~/project
+      - run:
+          name: Installing S Interpreter
+          command: pip install .
+      - run:
+          name: Installing Pytest
+          command: pip install pytest
       - run:
           name: Testing S Compiler/Interpreter
-          command: echo Here Be Pytest
+          command: python -m pytest --junitxml=test-results .
+      - store_test_results:
+          path: test-results
 
   deploy:
-    executor: python/default
+    docker:
+      - image: cimg/python:3.9
     steps:
       - checkout
       - attach_workspace:
@@ -35,11 +48,14 @@ jobs:
       - python/install-packages:
           pkg-manager: pip
       - run:
+          name: Installing Twine
+          command: pip install twine
+      - run:
           name: Uploading To Test Pypi
-          command: pip install twine && twine upload --skip-existing --repository testpypi dist/*
+          command: twine upload --skip-existing --repository testpypi dist/*
       - run:
           name: Uploading To Pypi
-          command: pip install twine && twine upload --skip-existing dist/*
+          command: twine upload --skip-existing dist/*
 
 workflows:
   ci:

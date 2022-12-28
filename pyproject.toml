@@ -6,10 +6,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "s_interpreter"
-version="0.0.3"
+version="0.0.4"
 dependencies = [
-    "sympy>=1.11.1",
-    "mpmath>=1.2.1"
+    "sympy>=1.11.1"
 ]
 authors = [
   { name="Muli Silman", email="mulisilman@gmail.com" },
