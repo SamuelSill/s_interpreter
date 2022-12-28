@@ -4,7 +4,6 @@ from s_interpreter.compiler import *
 from conftest import *
 
 
-@pytest.mark.dependency()
 @pytest.mark.parametrize(("variable_command_string", "compiled_variable_command"),
                          [
                              *[
