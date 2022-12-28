@@ -24,6 +24,7 @@ jobs:
     docker:
       - image: cimg/python:3.9
     steps:
+      - checkout
       - attach_workspace:
           at: ~/project
       - python/install-packages:
