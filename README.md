@@ -10,6 +10,7 @@
       - [Sugar Types](#Sugar-Types)
       - [REPEAT Statement](#REPEAT-Statement)
       - [The REPEAT Tradeoff](#The-REPEAT-Tradeoff)
+      - [The Numeric Type](#The-Numeric-Type)
       - [The Pitfalls of Sugars](#The-Pitfalls-of-Sugars)
         - [Sugar Argument Edge Cases](#Sugar-Argument-Edge-Cases)
         - [Sugar Internal Variables](#Sugar-Internal-Variables)
@@ -176,6 +177,7 @@ The supported sugar argument types are:
 * `Label` - To only match labels
 * `Variable` - To only match variables
 * `Const` - To only match const numbers (e.g _0, 1, 2, 3,_ ...)
+* `Numeric` - To match both variables and consts
 
 
 _Note that you can overload sugar definitions only differing by the sugar arguments' types!_
@@ -240,6 +242,42 @@ Any additional keyword that we add will remove us of the challenge of writing in
 
 You can still do meta-programming in `S` if you want though. Just not with consts 
 (as `S` does not natively support them).
+##### The Numeric Type
+While the `Const` type helps reduce code repetition, 
+there could still be code repetition between const/variable implementations.
+
+Suppose we've already implemented sugars for `V <- 0` and `V1 += V2`, 
+and now we wish to implement `V1 <- V2`.
+
+The straightforward approach would be to implement it as follows:
+
+```
+> {Variable V1} <- {Variable V2}
+      {V1} <- 0
+      {V1} += {V2}
+```
+This implementation works fine, but now we decide to implement the same for consts.
+So we implement the sugar `V += K`, and now we need to implement `V <- K`:
+
+```
+> {Variable V} <- {Const K}
+      {V} <- 0
+      {V} += {K}
+```
+But notice the code repetition between the two implementations! Yuck!
+
+Well, `Numeric` comes to the rescue:
+```
+> {Variable V} <- {Numeric N}
+      {V} <- 0
+      {V} += {N}
+```
+The numeric helps us create the two implementations at once!
+This works as intended. When we use the sugar for consts, the compiler uses sugar `V += K` to expand the second line, 
+and when we use the sugar for variables, it uses `V1 += V2`.
+
+You might think this is pretty minor, but imagine you wanted to implement `V1 <- V2 + V3`. 
+You'd have to implement the same sugar 4 times to allow for both const/variable usages.
 ##### The Pitfalls of Sugars
 ###### Sugar Argument Edge Cases
 Suppose you've implemented the sugars `{Variable V} <- {Const K}` and `{Variable V1} -= {Variable V2}` correctly, 

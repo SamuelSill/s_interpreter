@@ -215,6 +215,39 @@ def test_sugar_error(usage: str,
                                                                                      VariableCommandType.Increment)))
                                           ] * 3)] * 2)
                              ),
+                             (
+                                 SyntacticSugar("SUGAR {Const K}",
+                                                "{REPEAT K}",
+                                                "X <- X",
+                                                "{END REPEAT}"),
+                                 "SUGAR 0",
+                                 Program([])
+                             ),
+                             (
+                                 SyntacticSugar("SUGAR {Const K}{Variable V}",
+                                                "{REPEAT K}",
+                                                "{V} <- {V}",
+                                                "{END REPEAT}"),
+                                 "SUGAR 3X",
+                                 Program([Instruction(Sentence(VariableCommand(Variable("X"),
+                                                                               VariableCommandType.NoOp)))] * 3)
+                             ),
+                             (
+                                 SyntacticSugar("SUGAR {Numeric N}",
+                                                "{REPEAT N}",
+                                                "X <- X",
+                                                "{END REPEAT}"),
+                                 "SUGAR 3",
+                                 Program([Instruction(Sentence(VariableCommand(Variable("X"),
+                                                                               VariableCommandType.NoOp)))] * 3)
+                             ),
+                             (
+                                 SyntacticSugar("SUGAR {Numeric N}",
+                                                "{N} <- {N}"),
+                                 "SUGAR X",
+                                 Program([Instruction(Sentence(VariableCommand(Variable("X"),
+                                                                               VariableCommandType.NoOp)))])
+                             ),
                              *[
                                  (
                                      SyntacticSugar("SUGAR {Variable V} + {Label L}",

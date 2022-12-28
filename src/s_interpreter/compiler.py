@@ -656,6 +656,24 @@ class Const:
         return str(self.value)
 
 
+class Numeric:
+    from typing import Union as _Union
+
+    @staticmethod
+    def compile(numeric: str) -> _Union[Const, Variable]:
+        try:
+            return Const.compile(numeric)
+        except CompilationError:
+            pass
+
+        try:
+            return Variable.compile(numeric)
+        except CompilationError:
+            pass
+
+        raise CompilationError(f"Failed to compile numeric: {numeric}")
+
+
 class SyntacticSugar:
     from typing import (
         Optional as _Optional,
@@ -668,7 +686,8 @@ class SyntacticSugar:
     _supported_types_patterns: dict[_Union[_Type[Label], _Type[Variable], _Type[Const]], str] = {
         Label: r"[A-E]([1-9][0-9]*)?",
         Variable: r"[XYZ]([1-9][0-9]*)?",
-        Const: r"(([1-9][0-9]*)|0)"
+        Const: r"(([1-9][0-9]*)|0)",
+        Numeric: r"([XYZ]([1-9][0-9]*)?|([1-9][0-9]*)|0)"
     }
 
     _supported_types_regex_group: str = (
@@ -740,8 +759,8 @@ class SyntacticSugar:
                                        flags=_re.IGNORECASE)):
                 if match.group("const_name") not in self.__argument_name_to_type:
                     raise ValueError(f"Unknown const '{match.group('const_name')}' used in repeat!")
-                if self.__argument_name_to_type[match.group("const_name")] is not Const:
-                    raise ValueError(f"'{match.group('const_name')}' used in repeat but isn't const!")
+                if self.__argument_name_to_type[match.group("const_name")] not in {Const, Numeric}:
+                    raise ValueError(f"'{match.group('const_name')}' used in repeat but isn't const/numeric!")
                 repeat_counter += 1
             elif _re.fullmatch(r"\s*{\s*END\s+REPEAT\s*}\s*",
                                line,
