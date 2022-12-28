@@ -17,11 +17,12 @@ jobs:
           root: ~/project
           paths:
             - dist
+            - requirements.txt
+            - tests
   test:
     docker:
       - image: cimg/python:3.9
     steps:
-      - checkout
       - python/install-packages:
           pkg-manager: pip
       - attach_workspace:
