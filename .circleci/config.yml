@@ -19,6 +19,7 @@ jobs:
             - dist
             - requirements.txt
             - tests
+            - pyproject.toml
   test:
     docker:
       - image: cimg/python:3.9
