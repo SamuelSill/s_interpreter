@@ -6,8 +6,7 @@ from s_interpreter.compiler import *
 def test_program_error() -> None:
     with pytest.raises(ValueError):
         Program([
-            Instruction(None,
-                        Sentence(VariableCommand(Variable("Y", 1),
+            Instruction(Sentence(VariableCommand(Variable("Y", 1),
                                                  VariableCommandType.NoOp)))
         ])
 
@@ -19,7 +18,6 @@ def test_program_error() -> None:
                               Program(
                                  [
                                      Instruction(
-                                         None,
                                          Sentence(
                                              JumpCommand(Variable("X", 1), Label("A", 1))
                                          ))
@@ -30,13 +28,12 @@ def test_program_error() -> None:
                               Program(
                                  [
                                      Instruction(
-                                         None,
                                          Sentence(
                                              JumpCommand(Variable("X", 1), Label("A", 1))
                                          )),
                                      Instruction(
-                                         Label("A", 1),
-                                         Sentence(VariableCommand(Variable("Y", 1), VariableCommandType.NoOp))
+                                         Sentence(VariableCommand(Variable("Y", 1), VariableCommandType.NoOp)),
+                                         Label("A", 1)
                                      )
                                  ]
                               ))

@@ -9,8 +9,8 @@ from conftest import *
                              *[
                                  (f"[{label_name}{label_index}] "
                                   f"X <- X{operation}",
-                                  Instruction(Label(label_name, 1 if label_index == "" else label_index),
-                                              Sentence(VariableCommand(Variable("X", 1), command_type))))
+                                  Instruction(Sentence(VariableCommand(Variable("X", 1), command_type)),
+                                              Label(label_name, 1 if label_index == "" else label_index)))
                                  for operation, command_type in (("", VariableCommandType.NoOp),
                                                                  (" + 1", VariableCommandType.Increment),
                                                                  (" - 1", VariableCommandType.Decrement))
@@ -19,8 +19,7 @@ from conftest import *
                              ],
                              *[
                                  (f"X <- X{operation}",
-                                  Instruction(None,
-                                              Sentence(
+                                  Instruction(Sentence(
                                                   VariableCommand(Variable("X", 1),
                                                                   command_type))
                                               ))
@@ -30,25 +29,22 @@ from conftest import *
                              ],
                              *[
                                  (f"[{label_name}{label_index}] IF X != 0 GOTO A",
-                                  Instruction(Label(label_name, 1 if label_index == "" else label_index),
-                                              Sentence(
-                                                  JumpCommand(Variable("X", 1),
-                                                              Label("A", 1)))))
+                                  Instruction(Sentence(JumpCommand(Variable("X", 1),
+                                                                   Label("A", 1))),
+                                              Label(label_name, 1 if label_index == "" else label_index)))
                                  for label_name in LABEL_NAMES
                                  for label_index in ("", 1, 2, 3)
                              ],
                              (f"IF X != 0 GOTO A",
-                              Instruction(None,
-                                          Sentence(
+                              Instruction(Sentence(
                                               JumpCommand(Variable("X", 1),
                                                           Label("A", 1))))),
                              *[
                                  (f"{pre_whitespace}[{pre_label}A{post_label}]{post_brackets}"
                                   f"IF X != 0 GOTO A{post_whitespace}",
-                                  Instruction(Label("A", 1),
-                                              Sentence(
-                                                  JumpCommand(Variable("X", 1),
-                                                              Label("A", 1)))))
+                                  Instruction(Sentence(JumpCommand(Variable("X", 1),
+                                                                   Label("A", 1))),
+                                              Label("A", 1)))
                                  for pre_whitespace in OPTIONAL_WHITESPACE
                                  for post_whitespace in OPTIONAL_WHITESPACE
                                  for pre_label in OPTIONAL_WHITESPACE

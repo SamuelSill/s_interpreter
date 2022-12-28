@@ -272,15 +272,14 @@ def test_decode_repr_sentence_error(encoding: tuple[int, int]) -> None:
 @pytest.mark.parametrize(("instruction", "encoding"),
                          [
                              (
-                                 Instruction(None,
-                                             Sentence(JumpCommand(Variable("Y", 1),
+                                 Instruction(Sentence(JumpCommand(Variable("Y", 1),
                                                                   Label("A", 1)))),
                                  14
                              ),
                              (
-                                 Instruction(Label("A", 1),
-                                             Sentence(JumpCommand(Variable("Y", 1),
-                                                                  Label("A", 1)))),
+                                 Instruction(Sentence(JumpCommand(Variable("Y", 1),
+                                                                  Label("A", 1))),
+                                             Label("A", 1)),
                                  29
                              )
                          ])
@@ -304,15 +303,14 @@ def test_decode_sentence_error(encoding: int) -> None:
 @pytest.mark.parametrize(("instruction", "encoding"),
                          [
                              (
-                                 Instruction(None,
-                                             Sentence(JumpCommand(Variable("Y", 1),
+                                 Instruction(Sentence(JumpCommand(Variable("Y", 1),
                                                                   Label("A", 1)))),
                                  (0, (3, 0))
                              ),
                              (
-                                 Instruction(Label("A", 1),
-                                             Sentence(JumpCommand(Variable("Y", 1),
-                                                                  Label("A", 1)))),
+                                 Instruction(Sentence(JumpCommand(Variable("Y", 1),
+                                                                  Label("A", 1))),
+                                             Label("A", 1)),
                                  (1, (3, 0))
                              )
                          ])
@@ -359,20 +357,18 @@ def test_decode_repr_sentence_error(encoding: tuple[int, tuple[int, int]]) -> No
                          [
                              (
                                  Program([
-                                     Instruction(None,
-                                                 Sentence(JumpCommand(Variable("Y", 1),
+                                     Instruction(Sentence(JumpCommand(Variable("Y", 1),
                                                                       Label("A", 1))))
                                  ]),
                                  16383
                              ),
                              (
                                  Program([
-                                     Instruction(None,
-                                                 Sentence(JumpCommand(Variable("Y", 1),
+                                     Instruction(Sentence(JumpCommand(Variable("Y", 1),
                                                                       Label("A", 1)))),
-                                     Instruction(Label("A", 1),
-                                                 Sentence(JumpCommand(Variable("Y", 1),
-                                                                      Label("A", 1))))
+                                     Instruction(Sentence(JumpCommand(Variable("Y", 1),
+                                                                      Label("A", 1))),
+                                                 Label("A", 1))
                                  ]),
                                  1124440102746243071
                              )
@@ -398,20 +394,18 @@ def test_decode_program_error(encoding: int) -> None:
                          [
                              (
                                  Program([
-                                     Instruction(None,
-                                                 Sentence(JumpCommand(Variable("Y", 1),
+                                     Instruction(Sentence(JumpCommand(Variable("Y", 1),
                                                                       Label("A", 1))))
                                  ]),
                                  [(0, (3, 0))]
                              ),
                              (
                                  Program([
-                                     Instruction(None,
-                                                 Sentence(JumpCommand(Variable("Y", 1),
+                                     Instruction(Sentence(JumpCommand(Variable("Y", 1),
                                                                       Label("A", 1)))),
-                                     Instruction(Label("A", 1),
-                                                 Sentence(JumpCommand(Variable("Y", 1),
-                                                                      Label("A", 1))))
+                                     Instruction(Sentence(JumpCommand(Variable("Y", 1),
+                                                                      Label("A", 1))),
+                                                 Label("A", 1))
                                  ]),
                                  [(0, (3, 0)), (1, (3, 0))]
                              )

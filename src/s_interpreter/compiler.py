@@ -9,6 +9,8 @@ class CompilationError(RuntimeError):
 
 
 class EncodedPair:
+    from typing import Optional as _Optional
+
     def __init__(self,
                  first: int,
                  second: int):
@@ -31,8 +33,8 @@ class EncodedPair:
         return str(self.__tuple)
 
     def __eq__(self,
-               other: "EncodedPair") -> bool:
-        return self.__tuple == other.__tuple
+               other: _Optional["EncodedPair"]) -> bool:
+        return other is not None and self.__tuple == other.__tuple
 
     @staticmethod
     def decode(pair_encoding: int) -> "EncodedPair":
@@ -47,7 +49,7 @@ class EncodedPair:
 
 
 class EncodedList:
-    from typing import Iterator as _Iterator
+    from typing import Iterator as _Iterator, Optional as _Optional
 
     def __init__(self,
                  list_: list[int]):
@@ -83,8 +85,8 @@ class EncodedList:
         return str(self.__list)
 
     def __eq__(self,
-               other: "EncodedList") -> bool:
-        return self.__list == other.__list
+               other: _Optional["EncodedList"]) -> bool:
+        return other is not None and self.__list == other.__list
 
     def __iter__(self) -> _Iterator[int]:
         return iter(self.__list)
@@ -105,6 +107,8 @@ class EncodedList:
 
 @_dataclass(frozen=True)
 class Variable:
+    from typing import Optional as _Optional
+
     name: str
     index: int = 1
     _pattern: _ClassVar[_re.Pattern[str]] = _re.compile(r"\s*(?P<variable_name>[XYZ])(?P<index>([1-9][0-9]*)?)\s*",
@@ -163,8 +167,8 @@ class Variable:
         return self.name + ("" if self.index == 1 else str(self.index))
 
     def __eq__(self,
-               other: "Variable") -> bool:
-        return self.name.upper() == other.name.upper() and self.index == other.index
+               other: _Optional["Variable"]) -> bool:
+        return other is not None and self.name.upper() == other.name.upper() and self.index == other.index
 
     def __hash__(self) -> int:
         return hash((self.name.upper(), self.index))
@@ -172,6 +176,8 @@ class Variable:
 
 @_dataclass(frozen=True)
 class Label:
+    from typing import Optional as _Optional
+
     name: str
     index: int = 1
     _pattern: _ClassVar[_re.Pattern[str]] = _re.compile(r"\s*(?P<label>[A-E])(?P<index>([1-9][0-9]*)?)\s*",
@@ -209,8 +215,8 @@ class Label:
         return f"{self.name}" + ("" if self.index == 1 else str(self.index))
 
     def __eq__(self,
-               other: "Label") -> bool:
-        return self.name.upper() == other.name.upper() and self.index == other.index
+               other: _Optional["Label"]) -> bool:
+        return other is not None and self.name.upper() == other.name.upper() and self.index == other.index
 
     def __hash__(self) -> int:
         return hash((self.name.upper(), self.index))
@@ -401,8 +407,8 @@ class Sentence:
 class Instruction:
     from typing import Optional as _Optional
 
-    label: _Optional[Label]
     sentence: Sentence
+    label: _Optional[Label] = None
 
     _pattern: _ClassVar[_re.Pattern[str]] = _re.compile(r"\s*(\[\s*(?P<label>[A-E]([1-9][0-9]*)?)\s*])?"
                                                         r"\s*(?P<sentence>.*)\s*",
@@ -412,11 +418,11 @@ class Instruction:
     def compile(line: str) -> "Instruction":
         if not (instruction_match := _re.fullmatch(Instruction._pattern, line)):
             raise CompilationError(f"Failed to compile instruction: \"{line}\"")
-        return Instruction(Label.compile(label)
+        return Instruction(Sentence.compile(instruction_match.group("sentence")),
+                           Label.compile(label)
                            if (label := instruction_match.group("label"))
                            else
-                           None,
-                           Sentence.compile(instruction_match.group("sentence")))
+                           None)
 
     def encode_repr(self) -> tuple[int, tuple[int, int]]:
         return (
@@ -431,11 +437,11 @@ class Instruction:
     def decode_repr(repr_: tuple[int, tuple[int, int]]) -> "Instruction":
         label_encoding, sentence_encoding = repr_
         return Instruction(
+            Sentence.decode_repr(sentence_encoding),
             Label.decode(label_encoding)
             if label_encoding != 0
             else
-            None,
-            Sentence.decode_repr(sentence_encoding)
+            None
         )
 
     def encode(self) -> int:
@@ -482,8 +488,8 @@ class Program:
         index_to_inject: int
 
     @staticmethod
-    def __update_by_instruction(used_variables: set[Variable],
-                                used_labels: set[Label],
+    def __update_by_instruction(used_labels: set[Label],
+                                used_variables: set[Variable],
                                 *instructions_: Instruction) -> None:
         for instruction in instructions_:
             used_variables.add(instruction.sentence.command.variable)
@@ -508,9 +514,9 @@ class Program:
                     used_variables.add(parameter)
             if label_match := _re.fullmatch(Program._labeled_sugar_pattern, line):
                 used_labels.add(new_label := Label.compile(label_match.group("sugar_label")))
-                instructions.append(Instruction(new_label,
-                                                Sentence(VariableCommand(Variable("Y"),
-                                                                         VariableCommandType.NoOp))))
+                instructions.append(Instruction(Sentence(VariableCommand(Variable("Y"),
+                                                                         VariableCommandType.NoOp)),
+                                                new_label))
             return Program._SugarJob(sugar, line, len(instructions))
 
     @_dataclass
@@ -529,8 +535,8 @@ class Program:
         for line in program:
             try:
                 parse_result.instructions.append(Instruction.compile(line))
-                Program.__update_by_instruction(parse_result.used_variables,
-                                                parse_result.used_labels,
+                Program.__update_by_instruction(parse_result.used_labels,
+                                                parse_result.used_variables,
                                                 parse_result.instructions[-1])
             except CompilationError as compilation_failure:
                 sugar_job: Optional[Program._SugarJob] = Program.__create_sugar_job(line,
@@ -554,8 +560,8 @@ class Program:
                                                                                 program_parse_result.used_labels,
                                                                                 program_parse_result.used_variables,
                                                                                 verbose).instructions
-            Program.__update_by_instruction(program_parse_result.used_variables,
-                                            program_parse_result.used_labels,
+            Program.__update_by_instruction(program_parse_result.used_labels,
+                                            program_parse_result.used_variables,
                                             *instructions_to_inject)
             for instruction_index, instruction_to_inject in enumerate(instructions_to_inject):
                 program_parse_result.instructions.insert(sugar_job.index_to_inject + instruction_index,
@@ -718,26 +724,33 @@ class SyntacticSugar:
                         r"(?P=\g<argument_name>)",
                         usage)
 
+        if _re.search(r"[{}]", usage):
+            raise ValueError(f"Invalid sugar usage title: {self.__title}")
+
         usage = r"\s*(\[[A-E]([1-9][0-9]*)?\])?\s*" + _re.sub(r"\s+", r"\\s*", usage) + r"\s*"
 
         self.__invocation_regex: _re.Pattern[str] = _re.compile(usage, flags=_re.IGNORECASE)
 
     def __set_implementation(self,
-                             implementation: tuple[str]) -> None:
+                             implementation: tuple[str, ...]) -> None:
         repeat_counter: int = 0
         for line in implementation:
-            if _re.fullmatch(r"\s*{\s*REPEAT\s+.+\s*}\s*",
-                             line,
-                             flags=_re.IGNORECASE):
+            if (match := _re.fullmatch(r"\s*{\s*REPEAT\s+(?P<const_name>[A-Z]([A-Z]|\d)*)\s*}\s*",
+                                       line,
+                                       flags=_re.IGNORECASE)):
+                if match.group("const_name") not in self.__argument_name_to_type:
+                    raise ValueError(f"Unknown const '{match.group('const_name')}' used in repeat!")
+                if self.__argument_name_to_type[match.group("const_name")] is not Const:
+                    raise ValueError(f"'{match.group('const_name')}' used in repeat but isn't const!")
                 repeat_counter += 1
             elif _re.fullmatch(r"\s*{\s*END\s+REPEAT\s*}\s*",
                                line,
                                flags=_re.IGNORECASE):
                 if repeat_counter == 0:
-                    raise CompilationError("No 'REPEAT' for matching 'END REPEAT'!")
+                    raise ValueError("No 'REPEAT' for matching 'END REPEAT'!")
                 repeat_counter -= 1
         if repeat_counter > 0:
-            raise CompilationError("No 'END REPEAT' for matching 'REPEAT'!")
+            raise ValueError("No 'END REPEAT' for matching 'REPEAT'!")
 
         self.__implementation: tuple[str] = implementation
 
@@ -779,12 +792,39 @@ class SyntacticSugar:
             return label
 
     class _ProgramFixer:
-        from typing import Union as _Union
+        from typing import (
+            Union as _Union,
+            Optional as _Optional
+        )
+
+        def __used_labels_and_variables(self,
+                                        used_labels: _Optional[set[Label]],
+                                        used_variables: _Optional[set[Variable]]) -> tuple[set[Label], set[Variable]]:
+            used_labels = set() if used_labels is None else used_labels
+            used_variables = set() if used_variables is None else used_variables
+            used_label_params: set[Label] = set()
+            used_variable_params: set[Variable] = set()
+
+            for parameter in self.__parameters:
+                if type(parameter) is Label and parameter not in used_labels:
+                    used_label_params.add(parameter)
+                elif type(parameter) is Variable and parameter not in used_variables:
+                    used_variable_params.add(parameter)
+            if len(used_label_params) > 0:
+                used_labels = used_labels.union(used_label_params)
+            if len(used_variable_params) > 0:
+                used_variables = used_variables.union(used_variable_params)
+
+            return used_labels, used_variables
 
         def __init__(self,
-                     used_variables: set[Variable],
-                     used_labels: set[Label]):
+                     parameters: list[_Union[Label, Variable]],
+                     used_labels: _Optional[set[Label]],
+                     used_variables: _Optional[set[Variable]]):
             from typing import Union
+
+            self.__parameters: list[Union[Label, Variable]] = parameters
+            used_labels, used_variables = self.__used_labels_and_variables(used_labels, used_variables)
 
             self.__variable_generator: SyntacticSugar._VariableGenerator = (
                 SyntacticSugar._VariableGenerator(used_variables)
@@ -795,13 +835,12 @@ class SyntacticSugar:
             self.__fixes_to_perform: dict[Union[Label, Variable], Union[Label, Variable]] = {}
             self.__parameter_replacements: dict[str, str] = {}
 
-        def process_parameter_fixes(self,
-                                    parameters: list[_Union[Variable, Label]]) -> None:
+        def process_parameter_fixes(self) -> None:
             max_sugar_internals: int = 1000000000000000
             # Code smell due to the way the algorithm works with the sugar arguments (replacing them at the start
             # and fixing them later alongside the other variables)
 
-            for parameter in parameters:
+            for parameter in self.__parameters:
                 generated: type(parameter) = (
                     self.__label_generator
                     if type(parameter) is Label
@@ -843,19 +882,19 @@ class SyntacticSugar:
         def fix_program(self,
                         program: Program) -> Program:
             return Program([
-                Instruction(
-                    self.__fix(instruction.label),
-                    Sentence(
-                        JumpCommand(self.__fix(instruction.sentence.command.variable),
-                                    self.__fix(instruction.sentence.command.label))
-                        if type(instruction.sentence.command) is JumpCommand
-                        else
-                        VariableCommand(self.__fix(instruction.sentence.command.variable),
-                                        instruction.sentence.command.command_type)
+                    Instruction(
+                        Sentence(
+                            JumpCommand(self.__fix(instruction.sentence.command.variable),
+                                        self.__fix(instruction.sentence.command.label))
+                            if type(instruction.sentence.command) is JumpCommand
+                            else
+                            VariableCommand(self.__fix(instruction.sentence.command.variable),
+                                            instruction.sentence.command.command_type)
+                        ),
+                        self.__fix(instruction.label)
                     )
-                )
-                for instruction in program.instructions
-            ])
+                    for instruction in program.instructions
+                ])
 
     def validate(self,
                  invocation: str) -> bool:
@@ -917,9 +956,16 @@ class SyntacticSugar:
         if (invocation_match := _re.fullmatch(self.__invocation_regex, invocation)) is None:
             raise CompilationError(f"Failed using sugar {self.__title} to compile line: '{invocation}'")
 
-        program_fixer: SyntacticSugar._ProgramFixer = SyntacticSugar._ProgramFixer(used_variables, used_labels)
-        program_fixer.process_parameter_fixes(list(filter(lambda parameter: type(parameter) is not Const,
-                                                          self.__parameters(invocation_match))))
+        program_fixer: SyntacticSugar._ProgramFixer = SyntacticSugar._ProgramFixer(
+            [
+                parameter for parameter in self.__parameters(invocation_match)
+                if type(parameter) is not Const
+            ],
+            used_labels,
+            used_variables
+        )
+
+        program_fixer.process_parameter_fixes()
 
         sugar_program: Program = Program.compile(*self.__generate_instructions(invocation_match, program_fixer),
                                                  sugars=self.__sugars,
@@ -962,9 +1008,12 @@ def compile_slang_file(slang_file_path: str,
             if is_before_first_sugar:
                 is_before_first_sugar = False
             else:
-                sugars.append(SyntacticSugar(current_section_title,
-                                             *current_section_lines,
-                                             sugars=sugars.copy()))
+                try:
+                    sugars.append(SyntacticSugar(current_section_title,
+                                                 *current_section_lines,
+                                                 sugars=sugars.copy()))
+                except ValueError as exception:
+                    raise CompilationError(str(exception))
             is_main = bool(_re.fullmatch(r"\s*MAIN\s*",
                                          current_section_title := title_match.group("title").split("#")[0].strip(),
                                          _re.IGNORECASE))
@@ -1024,8 +1073,10 @@ def main() -> None:
     compiled_program: Program = (
         compile_slang_file(arguments.file, arguments.verbose)
         if arguments.decode is None
-        else Program.decode(arguments.decode)
+        else
+        Program.decode(arguments.decode)
     )
+
     time_taken_to_compile: float = time() - start_time
 
     if arguments.verbose and arguments.file is not None:

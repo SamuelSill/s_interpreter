@@ -12,6 +12,7 @@ def pytest_collection_modifyitems(items: list[_Function]):
         "test_sentence",
         "test_instruction",
         "test_program",
+        "test_sugar",
         "test_encode"
     ]
 
