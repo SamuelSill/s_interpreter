@@ -23,10 +23,10 @@ jobs:
     docker:
       - image: cimg/python:3.9
     steps:
-      - python/install-packages:
-          pkg-manager: pip
       - attach_workspace:
           at: ~/project
+      - python/install-packages:
+          pkg-manager: pip
       - run:
           name: Installing S Interpreter
           command: pip install .
