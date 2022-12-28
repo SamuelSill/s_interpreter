@@ -73,7 +73,7 @@ Compiling/Running the program:
 s_compiler -f main.slang -b output.txt
 
 # Now 'output.txt' contains *pure* S language code, no sugars.
-# Run the interpreter on the binary file on input '10 20 15'
+# Run the interpreter on the binary file on input '42'
 s_interpreter -b output.txt 42
 ```
 The console output:
@@ -160,11 +160,11 @@ We can define and use a syntactic sugar like so:
 A few details to notice:
 * Notice that in the definition of the sugar, we specified the type of `L`.
 This sugar will only be used if we pass it with a valid label.
-* The compiler makes sure that after it expands the `GOTO` sugar,
-  variable `Z` that was used inside the `GOTO` implementation **DOES NOT** collide with variable `Z`
-  if it were used outside the sugar.
-  We are safe to use any temporary variables (or labels) inside sugar implementations.
-  The exception to this rule is input/output variables though, as they CAN be manipulated from sugars.
+* Notice the usage of variable `Z` inside the `GOTO L` sugar.
+When the compiler expands the usage of the sugar, 
+it replaces all internal variables used in the sugar to variables guaranteed to be unused anywhere else in the program.
+The only exception to this rule is with I/O variables (`Y`/`X1`, `X2`, ...). 
+They can be manipulated internally from sugar code.
 * A given sugar may only use other sugars that are defined before it in the file.
 * Sugar definitions are allowed to overlap in terms of their usage patterns. 
   The sugar that will eventually be used in the compiled output is the first in the file that matches the string.
