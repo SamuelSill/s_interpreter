@@ -6,12 +6,13 @@ from s_interpreter.interpreter import Interpreter
 
 @pytest.fixture(scope="module")
 def compile_interpreter() -> None:
-    main(["-f", "s_interpreter.slang", "-o", "interpreter_program.txt"])
+    main(["-f", "tests/test_interpreter/s_interpreter.slang",
+          "-o", "tests/test_interpreter/interpreter_program.txt"])
 
 
 @pytest.fixture(scope="module")
 def interpreter_program_lines(compile_interpreter: None) -> list[str]:
-    with open("interpreter_program.txt", "r") as interpreter_program_file:
+    with open("tests/test_interpreter/interpreter_program.txt", "r") as interpreter_program_file:
         yield interpreter_program_file.readlines()
 
 
