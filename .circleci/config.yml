@@ -19,6 +19,7 @@ jobs:
             - dist
             - requirements.txt
             - tests
+            - build
             - pyproject.toml
   test:
     docker:
