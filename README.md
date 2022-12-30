@@ -339,7 +339,7 @@ You might think that it's safe to do the same with sugars, as the compiler guara
 that the sugar's internal variables are not used anywhere else in the program.
 
 Well, while you may be right that the compiler takes care of us 
-with regard to the uniqueness of the variables, a problem amy still occur 
+with regard to the uniqueness of the variables, a problem may still occur 
 if the sugar is used inside a loop.
 
 Let's see an example.

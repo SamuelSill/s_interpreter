@@ -1,6 +1,11 @@
 from dataclasses import dataclass as _dataclass
 import enum as _enum
-from typing import ClassVar as _ClassVar
+from typing import (
+    ClassVar as _ClassVar,
+    Sequence as _Sequence,
+    Optional as _Optional
+)
+
 import re as _re
 
 
@@ -9,8 +14,6 @@ class CompilationError(RuntimeError):
 
 
 class EncodedPair:
-    from typing import Optional as _Optional
-
     def __init__(self,
                  first: int,
                  second: int):
@@ -49,11 +52,11 @@ class EncodedPair:
 
 
 class EncodedList:
-    from typing import Iterator as _Iterator, Optional as _Optional
+    from typing import Iterator as _Iterator
 
     def __init__(self,
-                 list_: list[int]):
-        self.__list: list[int] = list_.copy()
+                 list_: _Sequence[int]):
+        self.__list: list[int] = list(list_)
 
         if any(element < 0 for element in self.__list):
             raise ValueError(f"{__class__.__name__} must be of non-negatives!")
@@ -107,8 +110,6 @@ class EncodedList:
 
 @_dataclass(frozen=True)
 class Variable:
-    from typing import Optional as _Optional
-
     name: str
     index: int = 1
     _pattern: _ClassVar[_re.Pattern[str]] = _re.compile(r"\s*(?P<variable_name>[XYZ])(?P<index>([1-9][0-9]*)?)\s*",
@@ -176,8 +177,6 @@ class Variable:
 
 @_dataclass(frozen=True)
 class Label:
-    from typing import Optional as _Optional
-
     name: str
     index: int = 1
     _pattern: _ClassVar[_re.Pattern[str]] = _re.compile(r"\s*(?P<label>[A-E])(?P<index>([1-9][0-9]*)?)\s*",
@@ -405,8 +404,6 @@ class Sentence:
 
 @_dataclass(frozen=True, eq=True)
 class Instruction:
-    from typing import Optional as _Optional
-
     sentence: Sentence
     label: _Optional[Label] = None
 
@@ -465,9 +462,7 @@ _program_recursion_depth: int = 0
 
 @_dataclass(frozen=True, eq=True)
 class Program:
-    from typing import Optional as _Optional
-
-    instructions: list[Instruction]
+    instructions: _Sequence[Instruction]
     _labeled_sugar_pattern: _ClassVar[_re.Pattern[str]] = _re.compile(r"\s*\[\s*(?P<sugar_label>"
                                                                       r"[A-E]([1-9][0-9]*)?)\s*].*",
                                                                       flags=_re.IGNORECASE)
@@ -529,7 +524,6 @@ class Program:
     @staticmethod
     def _parse(*program: str,
                sugars: list["SyntacticSugar"]) -> _ProgramParseResult:
-        from typing import Optional
         parse_result: Program._ProgramParseResult = Program._ProgramParseResult([], [], set(), set())
 
         for line in program:
@@ -539,11 +533,11 @@ class Program:
                                                 parse_result.used_variables,
                                                 parse_result.instructions[-1])
             except CompilationError as compilation_failure:
-                sugar_job: Optional[Program._SugarJob] = Program.__create_sugar_job(line,
-                                                                                    sugars,
-                                                                                    parse_result.instructions,
-                                                                                    parse_result.used_variables,
-                                                                                    parse_result.used_labels)
+                sugar_job: _Optional[Program._SugarJob] = Program.__create_sugar_job(line,
+                                                                                     sugars,
+                                                                                     parse_result.instructions,
+                                                                                     parse_result.used_variables,
+                                                                                     parse_result.used_labels)
                 if sugar_job is None:
                     raise compilation_failure
                 parse_result.sugar_jobs.append(sugar_job)
@@ -556,10 +550,12 @@ class Program:
             if verbose:
                 print("| " * (_program_recursion_depth - 1) + f"Compiling '{sugar_job.sugar_invocation}' "
                                                               f"('{sugar_job.sugar.title}')")
-            instructions_to_inject: list[Instruction] = sugar_job.sugar.compile(sugar_job.sugar_invocation,
-                                                                                program_parse_result.used_labels,
-                                                                                program_parse_result.used_variables,
-                                                                                verbose).instructions
+            instructions_to_inject: _Sequence[Instruction] = sugar_job.sugar.compile(
+                sugar_job.sugar_invocation,
+                program_parse_result.used_labels,
+                program_parse_result.used_variables,
+                verbose
+            ).instructions
             Program.__update_by_instruction(program_parse_result.used_labels,
                                             program_parse_result.used_variables,
                                             *instructions_to_inject)
@@ -573,7 +569,7 @@ class Program:
 
     @staticmethod
     def compile(*program: str,
-                sugars: _Optional[list["SyntacticSugar"]] = None,
+                sugars: _Optional[_Sequence["SyntacticSugar"]] = None,
                 verbose: bool = False) -> "Program":
         global _program_recursion_depth
         _program_recursion_depth += 1
@@ -597,7 +593,7 @@ class Program:
         ]
 
     @staticmethod
-    def decode_repr(repr_: list[tuple[int, tuple[int, int]]]) -> "Program":
+    def decode_repr(repr_: _Sequence[tuple[int, tuple[int, int]]]) -> "Program":
         return Program(
             [
                 Instruction.decode_repr(instruction_encoding)
@@ -622,7 +618,7 @@ class Program:
 
     def __add__(self,
                 other: "Program") -> "Program":
-        return Program(self.instructions + other.instructions)
+        return Program((*self.instructions, *other.instructions))
 
     def __str__(self) -> str:
         max_sentence_indentation: int = max(
@@ -676,7 +672,6 @@ class Numeric:
 
 class SyntacticSugar:
     from typing import (
-        Optional as _Optional,
         Union as _Union,
         Type as _Type
     )
@@ -776,9 +771,9 @@ class SyntacticSugar:
     def __init__(self,
                  usage: str,
                  *implementation: str,
-                 sugars: _Optional[list["SyntacticSugar"]] = None):
+                 sugars: _Optional[_Sequence["SyntacticSugar"]] = None):
         self.__title: str = usage
-        self.__sugars: list[SyntacticSugar] = [] if sugars is None else sugars
+        self.__sugars: _Sequence[SyntacticSugar] = [] if sugars is None else sugars
 
         usage = _re.sub(SyntacticSugar._special_chars_pattern, r"\\\g<special_char>", usage.strip())
         self.__create_sugar_args_dict(usage)
@@ -811,10 +806,7 @@ class SyntacticSugar:
             return label
 
     class _ProgramFixer:
-        from typing import (
-            Union as _Union,
-            Optional as _Optional
-        )
+        from typing import Union as _Union
 
         def __used_labels_and_variables(self,
                                         used_labels: _Optional[set[Label]],
@@ -1050,7 +1042,7 @@ def compile_slang_file(slang_file_path: str,
                            verbose=verbose)
 
 
-def main() -> None:
+def main(cli_args: _Optional[_Sequence[str]] = None) -> None:
     from argparse import ArgumentParser, Namespace
     from time import time
 
@@ -1086,7 +1078,7 @@ def main() -> None:
                                  "--verbose",
                                  action="store_true",
                                  help="If present, print additional verbose compilation info")
-    arguments: Namespace = argument_parser.parse_args()
+    arguments: Namespace = argument_parser.parse_args(cli_args)
 
     start_time: float = time()
     compiled_program: Program = (
