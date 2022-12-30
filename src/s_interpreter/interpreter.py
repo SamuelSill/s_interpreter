@@ -1,4 +1,8 @@
 from s_interpreter.compiler import Program as _Program
+from typing import (
+    Sequence as _Sequence,
+    Optional as _Optional
+)
 
 
 class InterpreterError(RuntimeError):
@@ -93,7 +97,7 @@ class Interpreter:
         return result
 
 
-def main() -> None:
+def main(args: _Optional[_Sequence[str]] = None) -> None:
     from argparse import ArgumentParser, Namespace
 
     argument_parser: ArgumentParser = ArgumentParser(description="S Compiler")
@@ -109,7 +113,7 @@ def main() -> None:
     argument_parser.add_argument("--run_info",
                                  action="store_true",
                                  help="Pass this flag to print additional info in the end of the program")
-    arguments: Namespace = argument_parser.parse_args()
+    arguments: Namespace = argument_parser.parse_args(args)
 
     with open(arguments.binary, "r") as binary_file:
         binary_file_content: list[str] = binary_file.readlines()

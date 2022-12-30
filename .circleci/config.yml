@@ -17,18 +17,11 @@ jobs:
           root: ~/project
           paths:
             - dist
-            - requirements.txt
-            - tests
-            - pyproject.toml
   test:
     docker:
       - image: cimg/python:3.9
     steps:
       - checkout
-      - attach_workspace:
-          at: ~/project
-      - python/install-packages:
-          pkg-manager: pip
       - run:
           name: Installing S Interpreter
           command: pip install .
@@ -47,8 +40,6 @@ jobs:
     steps:
       - attach_workspace:
           at: ~/project
-      - python/install-packages:
-          pkg-manager: pip
       - run:
           name: Installing Twine
           command: pip install twine
